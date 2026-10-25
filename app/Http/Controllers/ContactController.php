@@ -16,8 +16,8 @@ class ContactController extends Controller
         abort_unless($contact['form_enabled'], 404);
 
         $data = $request->validate([
-            'name'    => ['required', 'string', 'max:100'],
-            'email'   => ['required', 'email', 'max:150'],
+            'name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:150'],
             'message' => ['required', 'string', 'min:10', 'max:4000'],
             'website' => ['nullable', 'string', 'max:200'], // honeypot
         ]);
@@ -28,8 +28,8 @@ class ContactController extends Controller
         }
 
         Log::info('Portfolio contact message', [
-            'name'    => $data['name'],
-            'email'   => $data['email'],
+            'name' => $data['name'],
+            'email' => $data['email'],
             'message' => $data['message'],
         ]);
 
@@ -41,7 +41,7 @@ class ContactController extends Controller
                 function ($mail) use ($to, $data) {
                     $mail->to($to)
                         ->replyTo($data['email'], $data['name'])
-                        ->subject('Portfolio message from ' . $data['name']);
+                        ->subject('Portfolio message from '.$data['name']);
                 }
             );
         }

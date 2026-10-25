@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\LibraryController;
 use App\Http\Controllers\Admin\MediaController;
 use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\ContactController;
@@ -35,4 +36,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/media', [MediaController::class, 'index'])->name('media.index');
     Route::post('/media', [MediaController::class, 'store'])->name('media.store');
     Route::delete('/media', [MediaController::class, 'destroy'])->name('media.destroy');
+
+    Route::get('/library', [LibraryController::class, 'index'])->name('library.index');
+    Route::get('/library/{id}', [LibraryController::class, 'show'])->name('library.show');
+    Route::post('/library/import', [LibraryController::class, 'store'])->name('library.store');
+    Route::delete('/library/{id}', [LibraryController::class, 'destroy'])->name('library.destroy');
 });

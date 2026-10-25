@@ -91,7 +91,16 @@ export class Designer {
   }
 
   paletteEl() {
-    const box = el('aside', { class: 'palette', 'aria-label': 'Objects to add' }, el('h3', { text: 'Add to the room' }));
+    const box = el('aside', { class: 'palette', 'aria-label': 'Objects to add' },
+      el('h3', { text: 'Add to the room' }),
+      el('button', {
+        type: 'button',
+        class: 'btn btn-small',
+        style: { width: '100%', marginBottom: '10px' },
+        text: '📚 Browse Library…',
+        onclick: () => this.openLibraryPicker(),
+      })
+    );
     for (const group of catalog.groups) {
       const types = Object.entries(catalog.types).filter(([, d]) => d.group === group);
       if (!types.length) continue;
@@ -100,6 +109,79 @@ export class Designer {
       }, el('span', { class: 'palette-icon', style: { color: def.color }, text: def.icon }), el('span', { text: def.label })))));
     }
     return box;
+  }
+
+  openLibraryPicker() {
+    const backdrop = el('div', { class: 'modal-backdrop' });
+    const close = () => backdrop.remove();
+
+    const search = el('input', {
+      type: 'search',
+      class: 'library-search',
+      placeholder: 'Search library objects…',
+      style: { width: '100%', marginBottom: '12px' },
+      oninput: (e) => filterList(e.target.value),
+    });
+
+    const list = el('div', { class: 'library-grid', style: { maxHeight: '60vh', overflowY: 'auto' } });
+
+    const filterList = (q = '') => {
+      const query = q.toLowerCase();
+      const entries = Object.entries(catalog.types).filter(([type, def]) => {
+        if (!query) return true;
+        return (def.label || type).toLowerCase().includes(query) || (def.group || '').toLowerCase().includes(query);
+      });
+
+      if (!entries.length) {
+        list.replaceChildren(el('p', { class: 'empty', text: 'No matching objects found.' }));
+        return;
+      }
+
+      list.replaceChildren(...entries.map(([type, def]) => {
+        const thumb = el('div', { class: 'library-thumb', style: { height: '100px' } });
+        if (def.thumbnail_path && (def.file_type === 'svg' || def.file_type === 'dxf')) {
+          thumb.innerHTML = def.thumbnail_path;
+        } else if (def.file_path && def.file_type === 'svg') {
+          thumb.append(el('img', { src: def.file_path, alt: def.label }));
+        } else {
+          thumb.style.background = def.color ? `${def.color}22` : '#1e293b';
+          thumb.append(el('span', { class: 'builtin-icon', style: { color: def.color || '#38bdf8', fontSize: '2rem' }, text: def.icon || '⬡' }));
+        }
+
+        return el('div', {
+          class: 'library-card',
+          style: { cursor: 'pointer' },
+          onclick: () => {
+            this.addObject(type);
+            close();
+            this.ed.toast(`Added ${def.label || type} to room`);
+          },
+        },
+          thumb,
+          el('div', { class: 'library-meta', style: { padding: '8px 10px' } },
+            el('h4', { style: { fontSize: '0.9rem' }, text: def.label || type }),
+            el('span', { class: 'hint', text: `${def.group || 'Custom'} · Click to place` }),
+          ),
+        );
+      }));
+    };
+
+    filterList();
+
+    const box = el('div', { class: 'modal-box', style: { width: '640px' } },
+      el('div', { class: 'modal-head' },
+        el('h3', { text: 'Select an Object from the Library' }),
+        el('button', { type: 'button', class: 'btn btn-small', text: '✕', onclick: close }),
+      ),
+      search,
+      list,
+      el('div', { class: 'btn-row', style: { marginTop: '14px' } },
+        el('button', { type: 'button', class: 'btn', text: 'Cancel', onclick: close }),
+      ),
+    );
+
+    backdrop.append(box);
+    document.body.append(backdrop);
   }
 
   /* --------------------------------------------------------------- plan */
@@ -153,13 +235,47 @@ export class Designer {
     g.append(def.shape === 'circle'
       ? svgEl('circle', { r: (Math.max(f.w, f.d) / 2) * S, ...common })
       : svgEl('rect', { x: -wPx / 2, y: -dPx / 2, width: wPx, height: dPx, rx: 3, ...common }));
+
+    if (def.file_type === 'svg' && def.file_path) {
+      g.append(svgEl('image', {
+        href: def.file_path,
+        x: -wPx / 2 + 2, y: -dPx / 2 + 2,
+        width: Math.max(4, wPx - 4), height: Math.max(4, dPx - 4),
+        preserveAspectRatio: 'xMidYMid meet',
+        'pointer-events': 'none',
+      }));
+    } else if (def.file_type === 'dxf' && def.metadata?.entities) {
+      const bbox = def.metadata.bbox || { min_x: 0, min_y: 0, max_x: f.w, max_y: f.d };
+      const bw = Math.max(0.001, bbox.max_x - bbox.min_x);
+      const bd = Math.max(0.001, bbox.max_y - bbox.min_y);
+      for (const ent of (def.metadata.entities || []).slice(0, 50)) {
+        if (ent.type === 'LINE') {
+          const x1 = ((ent.x - bbox.min_x) / bw - 0.5) * (wPx * 0.85);
+          const y1 = ((ent.y - bbox.min_y) / bd - 0.5) * (dPx * 0.85);
+          const x2 = ((ent.x2 - bbox.min_x) / bw - 0.5) * (wPx * 0.85);
+          const y2 = ((ent.y2 - bbox.min_y) / bd - 0.5) * (dPx * 0.85);
+          g.append(svgEl('line', { x1, y1, x2, y2, stroke: color, 'stroke-width': 1.2, 'stroke-opacity': 0.9, 'pointer-events': 'none' }));
+        }
+      }
+    } else if (def.file_type === 'obj') {
+      g.append(svgEl('rect', {
+        x: -wPx / 2 + 2, y: -dPx / 2 + 2,
+        width: Math.max(4, wPx - 4), height: Math.max(4, dPx - 4),
+        rx: 3, fill: `${color}15`, stroke: color, 'stroke-width': 1.2,
+        'stroke-dasharray': '3,3',
+        'pointer-events': 'none',
+      }));
+    }
+
     // generous invisible hit area so tiny objects stay easy to grab
     g.append(svgEl('rect', { x: -Math.max(wPx, 26) / 2, y: -Math.max(dPx, 26) / 2, width: Math.max(wPx, 26), height: Math.max(dPx, 26), fill: 'transparent', class: 'obj-hit' }));
     if (def.shape !== 'circle' && o.type !== 'rug') {
       g.append(svgEl('path', { d: `M0 ${dPx / 2} l0 9 m-5 -5 l5 5 l5 -5`, class: 'obj-facing' }));
     }
-    const label = svgEl('text', { class: 'obj-icon', 'text-anchor': 'middle', 'dominant-baseline': 'central', transform: `rotate(${o.rot})`, 'pointer-events': 'none' }, document.createTextNode(def.icon));
-    g.append(label);
+    if (def.file_type !== 'svg') {
+      const label = svgEl('text', { class: 'obj-icon', 'text-anchor': 'middle', 'dominant-baseline': 'central', transform: `rotate(${o.rot})`, 'pointer-events': 'none' }, document.createTextNode(def.icon));
+      g.append(label);
+    }
     return g;
   }
 

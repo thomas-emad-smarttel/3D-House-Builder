@@ -18,9 +18,13 @@ namespace App\Support;
 final class ContentSanitizer
 {
     public const STATUSES = ['completed', 'in_development', 'planned'];
+
     public const SCENES = ['erp', 'shipping', 'gym', 'installments', 'profile', 'skills', 'timeline', 'contact', 'generic', 'custom'];
+
     public const KINDS = ['project', 'cv'];
+
     public const MAX = ['rooms' => 14, 'modules' => 10, 'skills' => 10, 'timeline' => 12, 'list' => 20, 'media' => 12];
+
     public const DEFAULT_LEAD = 'This CV is a house. Walk through it, open the doors, and see what I have built. The big door at the end of the hall is the project I am proudest of.';
 
     /** @var array<string,string> */
@@ -31,7 +35,7 @@ final class ContentSanitizer
     /** @return array{content: array, errors: array<string,string>} */
     public static function run(mixed $input): array
     {
-        $s = new self();
+        $s = new self;
         $content = $s->content(is_array($input) ? $input : []);
 
         return ['content' => $content, 'errors' => $s->errors];
@@ -42,13 +46,13 @@ final class ContentSanitizer
     private function content(array $in): array
     {
         return [
-            'owner'    => $this->owner($this->arr($in['owner'] ?? null)),
-            'cv_file'  => $this->cvFile($in['cv_file'] ?? null),
-            'contact'  => $this->contact($this->arr($in['contact'] ?? null)),
-            'profile'  => $this->profile($this->arr($in['profile'] ?? null)),
-            'skills'   => $this->skills($in['skills'] ?? []),
+            'owner' => $this->owner($this->arr($in['owner'] ?? null)),
+            'cv_file' => $this->cvFile($in['cv_file'] ?? null),
+            'contact' => $this->contact($this->arr($in['contact'] ?? null)),
+            'profile' => $this->profile($this->arr($in['profile'] ?? null)),
+            'skills' => $this->skills($in['skills'] ?? []),
             'timeline' => $this->timeline($in['timeline'] ?? []),
-            'rooms'    => $this->rooms($in['rooms'] ?? []),
+            'rooms' => $this->rooms($in['rooms'] ?? []),
             'settings' => $this->settings($this->arr($in['settings'] ?? null)),
         ];
     }
@@ -56,10 +60,10 @@ final class ContentSanitizer
     private function owner(array $o): array
     {
         return [
-            'name'        => $this->str($o['name'] ?? '', 'owner.name', 120, true),
-            'title'       => $this->str($o['title'] ?? '', 'owner.title', 160),
-            'tagline'     => $this->str($o['tagline'] ?? '', 'owner.tagline', 300),
-            'location'    => $this->nstr($o['location'] ?? null, 'owner.location', 120),
+            'name' => $this->str($o['name'] ?? '', 'owner.name', 120, true),
+            'title' => $this->str($o['title'] ?? '', 'owner.title', 160),
+            'tagline' => $this->str($o['tagline'] ?? '', 'owner.tagline', 300),
+            'location' => $this->nstr($o['location'] ?? null, 'owner.location', 120),
             'placeholder' => $this->bool($o['placeholder'] ?? false),
         ];
     }
@@ -82,36 +86,37 @@ final class ContentSanitizer
     private function contact(array $c): array
     {
         return [
-            'email'         => $this->email($c['email'] ?? null, 'contact.email'),
-            'linkedin'      => $this->url($c['linkedin'] ?? null, 'contact.linkedin'),
-            'github'        => $this->url($c['github'] ?? null, 'contact.github'),
-            'form_enabled'  => $this->bool($c['form_enabled'] ?? true),
+            'email' => $this->email($c['email'] ?? null, 'contact.email'),
+            'linkedin' => $this->url($c['linkedin'] ?? null, 'contact.linkedin'),
+            'github' => $this->url($c['github'] ?? null, 'contact.github'),
+            'form_enabled' => $this->bool($c['form_enabled'] ?? true),
             'receive_email' => $this->email($c['receive_email'] ?? null, 'contact.receive_email'),
-            'placeholder'   => $this->bool($c['placeholder'] ?? false),
+            'placeholder' => $this->bool($c['placeholder'] ?? false),
         ];
     }
 
     private function profile(array $p): array
     {
         return [
-            'headline'    => $this->str($p['headline'] ?? 'Developer profile', 'profile.headline', 120),
-            'intro'       => $this->str($p['intro'] ?? '', 'profile.intro', 2000),
-            'philosophy'  => $this->str($p['philosophy'] ?? '', 'profile.philosophy', 2000),
-            'expertise'   => $this->strings($p['expertise'] ?? [], 'profile.expertise', 200),
-            'goals'       => $this->strings($p['goals'] ?? [], 'profile.goals', 200),
+            'headline' => $this->str($p['headline'] ?? 'Developer profile', 'profile.headline', 120),
+            'intro' => $this->str($p['intro'] ?? '', 'profile.intro', 2000),
+            'philosophy' => $this->str($p['philosophy'] ?? '', 'profile.philosophy', 2000),
+            'expertise' => $this->strings($p['expertise'] ?? [], 'profile.expertise', 200),
+            'goals' => $this->strings($p['goals'] ?? [], 'profile.goals', 200),
             'placeholder' => $this->bool($p['placeholder'] ?? false),
         ];
     }
 
     private function skills(mixed $v): array
     {
-        $out = []; $seen = [];
+        $out = [];
+        $seen = [];
         foreach ($this->items($v, 'skills', self::MAX['skills']) as $i => $s) {
             $p = "skills.$i";
             $out[] = [
-                'id'          => $this->id($s['id'] ?? '', "$p.id", $seen),
-                'name'        => $this->str($s['name'] ?? '', "$p.name", 80, true),
-                'items'       => $this->strings($s['items'] ?? [], "$p.items", 80),
+                'id' => $this->id($s['id'] ?? '', "$p.id", $seen),
+                'name' => $this->str($s['name'] ?? '', "$p.name", 80, true),
+                'items' => $this->strings($s['items'] ?? [], "$p.items", 80),
                 'placeholder' => $this->bool($s['placeholder'] ?? false),
             ];
         }
@@ -121,17 +126,18 @@ final class ContentSanitizer
 
     private function timeline(mixed $v): array
     {
-        $out = []; $seen = [];
+        $out = [];
+        $seen = [];
         foreach ($this->items($v, 'timeline', self::MAX['timeline']) as $i => $t) {
             $p = "timeline.$i";
             $out[] = [
-                'id'               => $this->id($t['id'] ?? '', "$p.id", $seen),
-                'organization'     => $this->str($t['organization'] ?? '', "$p.organization", 120, true),
-                'role'             => $this->str($t['role'] ?? '', "$p.role", 120),
-                'dates'            => $this->str($t['dates'] ?? '', "$p.dates", 60),
+                'id' => $this->id($t['id'] ?? '', "$p.id", $seen),
+                'organization' => $this->str($t['organization'] ?? '', "$p.organization", 120, true),
+                'role' => $this->str($t['role'] ?? '', "$p.role", 120),
+                'dates' => $this->str($t['dates'] ?? '', "$p.dates", 60),
                 'responsibilities' => $this->strings($t['responsibilities'] ?? [], "$p.responsibilities", 300),
-                'achievements'     => $this->strings($t['achievements'] ?? [], "$p.achievements", 300),
-                'placeholder'      => $this->bool($t['placeholder'] ?? false),
+                'achievements' => $this->strings($t['achievements'] ?? [], "$p.achievements", 300),
+                'placeholder' => $this->bool($t['placeholder'] ?? false),
             ];
         }
 
@@ -140,7 +146,9 @@ final class ContentSanitizer
 
     private function rooms(mixed $v): array
     {
-        $out = []; $seen = ['hub' => true]; $flagship = false;
+        $out = [];
+        $seen = ['hub' => true];
+        $flagship = false;
         $list = $this->items($v, 'rooms', self::MAX['rooms']);
         if ($list === []) {
             $this->err('rooms', 'Add at least one room.');
@@ -159,7 +167,8 @@ final class ContentSanitizer
             }
             $id = $this->id($r['id'] ?? '', "$p.id", $seen);
 
-            $modules = []; $mseen = [];
+            $modules = [];
+            $mseen = [];
             foreach ($this->items($r['modules'] ?? [], "$p.modules", self::MAX['modules']) as $j => $m) {
                 $modules[] = $this->module($m, "$p.modules.$j", true, $mseen);
             }
@@ -171,16 +180,16 @@ final class ContentSanitizer
                 ? $this->layout($r['layout'] ?? null, "$p.layout", array_column($modules, 'id'))
                 : null;
             $out[] = [
-                'id'       => $id,
-                'scene'    => $scene,
-                'kind'     => $this->enum($r['kind'] ?? 'project', "$p.kind", self::KINDS, 'project'),
-                'name'     => $this->str($r['name'] ?? '', "$p.name", 80, true),
-                'tagline'  => $this->str($r['tagline'] ?? '', "$p.tagline", 240),
-                'accent'   => $this->color($r['accent'] ?? '#d9a85f', "$p.accent"),
+                'id' => $id,
+                'scene' => $scene,
+                'kind' => $this->enum($r['kind'] ?? 'project', "$p.kind", self::KINDS, 'project'),
+                'name' => $this->str($r['name'] ?? '', "$p.name", 80, true),
+                'tagline' => $this->str($r['tagline'] ?? '', "$p.tagline", 240),
+                'accent' => $this->color($r['accent'] ?? '#d9a85f', "$p.accent"),
                 'flagship' => $isFlagship,
                 'overview' => is_array($overview) ? $this->module($overview, "$p.overview", false, $noIds) : null,
-                'modules'  => $modules,
-                'layout'   => $layout,
+                'modules' => $modules,
+                'layout' => $layout,
             ];
         }
 
@@ -195,20 +204,20 @@ final class ContentSanitizer
         $id = $withId ? $this->id($m['id'] ?? '', "$p.id", $seen) : null;
 
         return [
-            'id'           => $id,
-            'name'         => $this->str($m['name'] ?? '', "$p.name", 120, true),
-            'status'       => $this->enum($m['status'] ?? 'planned', "$p.status", self::STATUSES, 'planned'),
-            'placeholder'  => $this->bool($m['placeholder'] ?? false),
-            'problem'      => $this->nstr($m['problem'] ?? null, "$p.problem", 1500),
-            'features'     => $this->features($m['features'] ?? [], "$p.features"),
-            'tech'         => $this->strings($m['tech'] ?? [], "$p.tech", 60),
-            'role'         => $this->nstr($m['role'] ?? null, "$p.role", 1000),
+            'id' => $id,
+            'name' => $this->str($m['name'] ?? '', "$p.name", 120, true),
+            'status' => $this->enum($m['status'] ?? 'planned', "$p.status", self::STATUSES, 'planned'),
+            'placeholder' => $this->bool($m['placeholder'] ?? false),
+            'problem' => $this->nstr($m['problem'] ?? null, "$p.problem", 1500),
+            'features' => $this->features($m['features'] ?? [], "$p.features"),
+            'tech' => $this->strings($m['tech'] ?? [], "$p.tech", 60),
+            'role' => $this->nstr($m['role'] ?? null, "$p.role", 1000),
             'architecture' => $this->nstr($m['architecture'] ?? null, "$p.architecture", 2000),
-            'media'        => $this->media($m['media'] ?? [], "$p.media"),
-            'links'        => [
-                'demo'   => $this->url($links['demo'] ?? null, "$p.links.demo"),
+            'media' => $this->media($m['media'] ?? [], "$p.media"),
+            'links' => [
+                'demo' => $this->url($links['demo'] ?? null, "$p.links.demo"),
                 'source' => $this->url($links['source'] ?? null, "$p.links.source"),
-                'docs'   => $this->url($links['docs'] ?? null, "$p.links.docs"),
+                'docs' => $this->url($links['docs'] ?? null, "$p.links.docs"),
             ],
         ];
     }
@@ -243,8 +252,8 @@ final class ContentSanitizer
                 continue;
             }
             $out[] = [
-                'type'    => $this->enum($m['type'] ?? 'image', "$p.$i.type", ['image', 'video'], 'image'),
-                'src'     => $src,
+                'type' => $this->enum($m['type'] ?? 'image', "$p.$i.type", ['image', 'video'], 'image'),
+                'src' => $src,
                 'caption' => $this->nstr($m['caption'] ?? null, "$p.$i.caption", 200),
             ];
         }
@@ -258,12 +267,33 @@ final class ContentSanitizer
     public static function catalog(): array
     {
         if (self::$catalog === null) {
-            $file = dirname(__DIR__, 2) . '/resources/js/scenes/custom/catalog.json';
-            $json = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
-            self::$catalog = is_array($json) ? $json : ['room' => [], 'themes' => [], 'materials' => [], 'types' => [], 'limits' => ['objects' => 0, 'lights' => 0]];
+            if (function_exists('app') && app()->bound(LibraryStore::class)) {
+                self::$catalog = app(LibraryStore::class)->catalog();
+            } else {
+                require_once __DIR__.'/LibraryStore.php';
+                $types = [];
+                foreach (LibraryStore::BUILTIN_TYPES as $k => $def) {
+                    $types[$k] = $def;
+                }
+                self::$catalog = [
+                    'version' => 2,
+                    'room' => LibraryStore::ROOM,
+                    'themes' => LibraryStore::THEMES,
+                    'materials' => LibraryStore::MATERIALS,
+                    'groups' => LibraryStore::GROUPS,
+                    'limits' => LibraryStore::LIMITS,
+                    'types' => $types,
+                ];
+            }
         }
 
         return self::$catalog;
+    }
+
+    /** Clear cached catalog (e.g. after adding or deleting library objects). */
+    public static function flushCatalog(): void
+    {
+        self::$catalog = null;
     }
 
     /** @param list<string> $moduleIds ids of this room's modules (module displays must point at one) */
@@ -280,27 +310,34 @@ final class ContentSanitizer
         $t = $this->arr($v['theme'] ?? null);
         $themes = $cat['themes'];
         $theme = [
-            'floor'          => $this->enum($t['floor'] ?? 'wood', "$p.theme.floor", $themes['floor'] ?? ['wood'], 'wood'),
-            'wall'           => $this->enum($t['wall'] ?? 'plaster', "$p.theme.wall", $themes['wall'] ?? ['plaster'], 'plaster'),
-            'ceiling'        => $this->enum($t['ceiling'] ?? 'plaster', "$p.theme.ceiling", $themes['ceiling'] ?? ['plaster'], 'plaster'),
-            'light'          => $this->enum($t['light'] ?? 'warm', "$p.theme.light", $themes['light'] ?? ['warm'], 'warm'),
-            'brightness'     => $this->num($t['brightness'] ?? 1, "$p.theme.brightness", 0.4, 1.8),
-            'bg'             => $this->color($t['bg'] ?? '#0b0d11', "$p.theme.bg"),
-            'fog'            => $this->bool($t['fog'] ?? true),
-            'lightbars'      => $this->bool($t['lightbars'] ?? true),
-            'accent_strip'   => $this->bool($t['accent_strip'] ?? true),
-            'ambient_hz'     => (int) round($this->num($t['ambient_hz'] ?? 105, "$p.theme.ambient_hz", 60, 220)),
+            'floor' => $this->enum($t['floor'] ?? 'wood', "$p.theme.floor", $themes['floor'] ?? ['wood'], 'wood'),
+            'wall' => $this->enum($t['wall'] ?? 'plaster', "$p.theme.wall", $themes['wall'] ?? ['plaster'], 'plaster'),
+            'ceiling' => $this->enum($t['ceiling'] ?? 'plaster', "$p.theme.ceiling", $themes['ceiling'] ?? ['plaster'], 'plaster'),
+            'light' => $this->enum($t['light'] ?? 'warm', "$p.theme.light", $themes['light'] ?? ['warm'], 'warm'),
+            'brightness' => $this->num($t['brightness'] ?? 1, "$p.theme.brightness", 0.4, 1.8),
+            'bg' => $this->color($t['bg'] ?? '#0b0d11', "$p.theme.bg"),
+            'fog' => $this->bool($t['fog'] ?? true),
+            'lightbars' => $this->bool($t['lightbars'] ?? true),
+            'accent_strip' => $this->bool($t['accent_strip'] ?? true),
+            'ambient_hz' => (int) round($this->num($t['ambient_hz'] ?? 105, "$p.theme.ambient_hz", 60, 220)),
             'ambient_bright' => $this->num($t['ambient_bright'] ?? 0.5, "$p.theme.ambient_bright", 0, 1),
-            'floor_sound'    => $this->enum($t['floor_sound'] ?? 'wood', "$p.theme.floor_sound", $themes['floor_sound'] ?? ['wood'], 'wood'),
+            'floor_sound' => $this->enum($t['floor_sound'] ?? 'wood', "$p.theme.floor_sound", $themes['floor_sound'] ?? ['wood'], 'wood'),
         ];
 
-        $objects = []; $seen = []; $lights = 0;
+        $objects = [];
+        $seen = [];
+        $lights = 0;
         foreach ($this->items($v['objects'] ?? [], "$p.objects", (int) ($cat['limits']['objects'] ?? 120)) as $i => $o) {
             $o = $this->arr($o);
             $op = "$p.objects.$i";
             $type = is_string($o['type'] ?? null) ? $o['type'] : '';
+            $libraryId = is_string($o['library_id'] ?? null) ? $o['library_id'] : $type;
+            if (! isset($cat['types'][$type]) && isset($cat['types'][$libraryId])) {
+                $type = $libraryId;
+            }
             if (! isset($cat['types'][$type])) {
                 $this->err("$op.type", 'Unknown object type.');
+
                 continue;
             }
             $def = $cat['types'][$type];
@@ -329,7 +366,7 @@ final class ContentSanitizer
             }
 
             if ($type === 'light' && ++$lights > (int) ($cat['limits']['lights'] ?? 6)) {
-                $this->err($op, 'At most ' . ($cat['limits']['lights'] ?? 6) . ' lights per room.');
+                $this->err($op, 'At most '.($cat['limits']['lights'] ?? 6).' lights per room.');
             }
             if ($this->collides($def, $params)) {
                 [$fw, $fd] = $this->footprint($def, $params, $rot);
@@ -338,7 +375,11 @@ final class ContentSanitizer
                 }
             }
 
-            $objects[] = ['id' => $id, 'type' => $type, 'x' => $x, 'z' => $z, 'rot' => $rot, 'p' => $params];
+            $objData = ['id' => $id, 'type' => $type, 'x' => $x, 'z' => $z, 'rot' => $rot, 'p' => $params];
+            if (isset($o['library_id']) && is_string($o['library_id'])) {
+                $objData['library_id'] = $o['library_id'];
+            }
+            $objects[] = $objData;
         }
 
         return ['size' => ['w' => $w, 'd' => $d, 'h' => $h], 'theme' => $theme, 'objects' => $objects];
@@ -386,10 +427,12 @@ final class ContentSanitizer
     {
         $f = $def['footprint'];
         $val = fn ($x) => is_numeric($x) ? (float) $x : (float) ($p[$x] ?? 0);
-        $w = $val($f['w']); $d = $val($f['d']);
+        $w = $val($f['w']);
+        $d = $val($f['d']);
         if (isset($f['mult'])) {
             $m = $val($f['mult']);
-            $w *= $m; $d *= $m;
+            $w *= $m;
+            $d *= $m;
         }
 
         return ($rot === 90 || $rot === 270) ? [$d, $w] : [$w, $d];
@@ -405,13 +448,12 @@ final class ContentSanitizer
         return (bool) $c;
     }
 
-
     private function settings(array $s): array
     {
         return [
-            'welcome_lead'    => $this->str($s['welcome_lead'] ?? self::DEFAULT_LEAD, 'settings.welcome_lead', 400) ?: self::DEFAULT_LEAD,
-            'exposure'        => $this->num($s['exposure'] ?? 1.15, 'settings.exposure', 0.5, 2.5),
-            'shadows'         => $this->bool($s['shadows'] ?? true),
+            'welcome_lead' => $this->str($s['welcome_lead'] ?? self::DEFAULT_LEAD, 'settings.welcome_lead', 400) ?: self::DEFAULT_LEAD,
+            'exposure' => $this->num($s['exposure'] ?? 1.15, 'settings.exposure', 0.5, 2.5),
+            'shadows' => $this->bool($s['shadows'] ?? true),
             'max_pixel_ratio' => $this->num($s['max_pixel_ratio'] ?? 1.75, 'settings.max_pixel_ratio', 1.0, 3.0),
         ];
     }
@@ -515,7 +557,7 @@ final class ContentSanitizer
         if (in_array($v, $allowed, true)) {
             return $v;
         }
-        $this->err($path, 'Choose one of: ' . implode(', ', $allowed) . '.');
+        $this->err($path, 'Choose one of: '.implode(', ', $allowed).'.');
 
         return $default;
     }

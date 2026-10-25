@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 class MediaController extends Controller
 {
     private const DIR = 'portfolio';
+
     private const TYPES = [
         'jpg' => 'image', 'jpeg' => 'image', 'png' => 'image', 'webp' => 'image', 'gif' => 'image',
         'mp4' => 'video', 'webm' => 'video', 'pdf' => 'pdf',
@@ -35,8 +36,8 @@ class MediaController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'files'   => ['required', 'array', 'max:10'],
-            'files.*' => ['file', 'max:51200', 'mimes:' . implode(',', array_keys(self::TYPES))],
+            'files' => ['required', 'array', 'max:10'],
+            'files.*' => ['file', 'max:51200', 'mimes:'.implode(',', array_keys(self::TYPES))],
         ]);
 
         $saved = [];
@@ -46,7 +47,7 @@ class MediaController extends Controller
                 continue;
             }
             $base = Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) ?: 'file';
-            $name = Str::lower(Str::random(6)) . '-' . Str::limit($base, 60, '') . '.' . $ext;
+            $name = Str::lower(Str::random(6)).'-'.Str::limit($base, 60, '').'.'.$ext;
             $path = $file->storeAs(self::DIR, $name, 'public');
             $saved[] = $this->describe($path);
         }
@@ -57,7 +58,7 @@ class MediaController extends Controller
     public function destroy(Request $request): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'regex:/^[A-Za-z0-9._-]+$/', 'max:200']]);
-        Storage::disk('public')->delete(self::DIR . '/' . $data['name']);
+        Storage::disk('public')->delete(self::DIR.'/'.$data['name']);
 
         return response()->json(['deleted' => $data['name']]);
     }
@@ -71,11 +72,11 @@ class MediaController extends Controller
         $disk = Storage::disk('public');
 
         return [
-            'name'     => basename($path),
-            'type'     => self::TYPES[$ext],
-            'url'      => '/storage/' . $path,          // site-relative on purpose
-            'path'     => 'storage/' . $path,           // what cv_file expects
-            'size'     => $disk->size($path),
+            'name' => basename($path),
+            'type' => self::TYPES[$ext],
+            'url' => '/storage/'.$path,          // site-relative on purpose
+            'path' => 'storage/'.$path,           // what cv_file expects
+            'size' => $disk->size($path),
             'modified' => $disk->lastModified($path),
         ];
     }

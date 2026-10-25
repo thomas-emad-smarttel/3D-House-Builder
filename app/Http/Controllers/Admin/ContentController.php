@@ -4,15 +4,17 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Support\ContentSanitizer;
+use App\Support\LibraryStore;
 use App\Support\PortfolioStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ContentController extends Controller
 {
-    public function __construct(private readonly PortfolioStore $store)
-    {
-    }
+    public function __construct(
+        private readonly PortfolioStore $store,
+        private readonly LibraryStore $library
+    ) {}
 
     public function show(): JsonResponse
     {
@@ -31,7 +33,7 @@ class ContentController extends Controller
             return response()->json(['message' => 'Some fields need attention.', 'errors' => $errors], 422);
         }
 
-        $this->store->save($content, $request->user()?->id, 'Before save by ' . ($request->user()?->email ?? 'unknown'));
+        $this->store->save($content, $request->user()?->id, 'Before save by '.($request->user()?->email ?? 'unknown'));
 
         return response()->json($this->payload($content) + ['saved_at' => now()->toIso8601String()]);
     }
@@ -58,14 +60,15 @@ class ContentController extends Controller
     {
         return [
             'content' => $content,
-            'meta'    => [
-                'scenes'      => ContentSanitizer::SCENES,
-                'statuses'    => ContentSanitizer::STATUSES,
-                'kinds'       => ContentSanitizer::KINDS,
-                'max'         => ContentSanitizer::MAX,
-                'customised'  => $this->store->isCustomised(),
-                'game_url'    => route('game'),
-                'cv_url'      => route('cv'),
+            'library' => $this->library->all(),
+            'meta' => [
+                'scenes' => ContentSanitizer::SCENES,
+                'statuses' => ContentSanitizer::STATUSES,
+                'kinds' => ContentSanitizer::KINDS,
+                'max' => ContentSanitizer::MAX,
+                'customised' => $this->store->isCustomised(),
+                'game_url' => route('game'),
+                'cv_url' => route('cv'),
             ],
         ];
     }

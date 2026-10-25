@@ -1,5 +1,6 @@
 import '../css/app.css';
 import { loadPortfolio } from './data/portfolio.js';
+import { syncLibrary } from './scenes/custom/library.js';
 import { Progress } from './state/progress.js';
 import { AudioEngine } from './game/Audio.js';
 import { createUi } from './ui/index.js';
@@ -29,6 +30,9 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
 async function main() {
   const data = loadPortfolio();
+  if (Array.isArray(data.library)) {
+    syncLibrary(data.library);
+  }
   // Dashboard settings override the defaults before anything is built.
   const st = data.settings ?? {};
   Object.assign(SETTINGS.render, {

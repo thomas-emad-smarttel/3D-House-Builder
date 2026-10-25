@@ -3,16 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Support\PortfolioData;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Contracts\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PortfolioController extends Controller
 {
-    public function __construct(private readonly PortfolioData $portfolio)
-    {
-    }
+    public function __construct(private readonly PortfolioData $portfolio) {}
 
     /** The 3D game. */
     public function game(): View
@@ -24,7 +22,7 @@ class PortfolioController extends Controller
     public function cv(Request $request): View
     {
         return view('cv', [
-            'p'     => $this->portfolio->all(),
+            'p' => $this->portfolio->all(),
             'print' => $request->boolean('print'),
         ]);
     }

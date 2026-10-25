@@ -3,11 +3,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { JSDOM } from 'jsdom';
 
 const root = new URL('..', import.meta.url);
-const rootPath = (p) => new URL(p, root).pathname;
+const rootPath = (p) => fileURLToPath(new URL(p, root));
 const php = (...args) => execFileSync('php', [rootPath('tools/sanitizer-check.php'), ...args], { encoding: 'utf8' });
 
 const dom = new JSDOM('<!doctype html><meta name="csrf-token" content="tok"><body><div id="admin-app"></div><form id="logout-form" method="POST" action="/admin/logout" hidden></form></body>', { pretendToBeVisual: true, url: 'http://localhost/admin' });
@@ -46,6 +47,7 @@ globalThis.fetch = window.fetch = async (url, opts = {}) => {
     return json(201, { files: added });
   }
   if (url === '/admin/media' && method === 'DELETE') { files = files.filter((f) => f.name !== JSON.parse(opts.body).name); return json(200, {}); }
+  if (url.startsWith('/admin/library') && method === 'GET') return json(200, { objects: [], categories: ['Structure', 'Furniture', 'Displays', 'Interactive', 'Effects', 'Custom'], file_types: ['builtin', 'svg', 'dxf'] });
   return json(404, { message: 'not found' });
 };
 
@@ -68,7 +70,7 @@ const ed = new Editor(document.getElementById('admin-app'));
 await ed.init();
 
 console.log('\n[shell]');
-ok($$('.nav-item').length === 10, '10 sections in the navigation (incl. Room designer)');
+ok($$('.nav-item').length === 11, '11 sections in the navigation (incl. Room designer and Object library)');
 ok(status() === 'All changes saved', 'starts clean');
 ok(field('Your name').value === stored.owner.name, 'owner form is populated from the server');
 

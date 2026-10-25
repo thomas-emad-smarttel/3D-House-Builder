@@ -58,6 +58,8 @@ export class Player {
   }
 
   applyCamera(moveAmt = 0) {
+    if (!Number.isFinite(this.x)) this.x = 0;
+    if (!Number.isFinite(this.z)) this.z = 0;
     const bobY = this.reduced ? 0 : Math.sin(this.bob) * 0.028 * Math.min(1.4, moveAmt);
     this.camera.position.set(this.x, SETTINGS.player.eye + bobY, this.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');

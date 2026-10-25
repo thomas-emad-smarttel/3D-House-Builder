@@ -146,7 +146,6 @@ class AdminTest extends TestCase
 
         $this->putJson('/admin/content', ['content' => $content])
             ->assertStatus(422)
-            ->assertJsonValidationErrors([]) // shape check only: the keys are layout paths
             ->assertJsonStructure(['errors']);
 
         $errors = $this->putJson('/admin/content', ['content' => $content])->json('errors');

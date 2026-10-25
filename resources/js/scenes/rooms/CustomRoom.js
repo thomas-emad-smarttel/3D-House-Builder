@@ -3,7 +3,7 @@ import { lightBar } from '../../game/props.js';
 import { blocked } from '../../game/collision.js';
 import { createRoom, lighting, pointGlow } from '../roomKit.js';
 import { BUILDERS } from '../custom/builders.js';
-import { newLayout } from '../custom/catalog.js';
+import { syncLibrary, registerLibraryObject, newLayout, typeDef } from '../custom/catalog.js';
 
 const LIGHTS = {
   warm: { sky: '#dfe6f2', ground: '#4b4036', color: '#ffe8c8', bar: '#ffe2b0', point: '#ffd9a8' },
@@ -17,6 +17,9 @@ const LIGHTS = {
  * bad entry can never make the room unenterable.
  */
 export default function build(ctx, room) {
+  if (Array.isArray(ctx?.data?.library)) {
+    syncLibrary(ctx.data.library);
+  }
   const L = room.layout ?? newLayout();
   const { w, d, h } = L.size;
   const t = L.theme;
@@ -47,9 +50,23 @@ export default function build(ctx, room) {
   }
 
   for (const o of L.objects) {
-    const fn = BUILDERS[o.type];
+    let fn = BUILDERS[o.type];
+    let def = null;
+    if (!fn) {
+      def = typeDef(o.library_id || o.type);
+      if (!def && Array.isArray(ctx?.data?.library)) {
+        const found = ctx.data.library.find((item) => item.id === o.library_id || item.id === o.type);
+        if (found) {
+          registerLibraryObject(found);
+          def = typeDef(o.library_id || o.type);
+        }
+      }
+      if (def?.file_type === 'svg') fn = BUILDERS.svg;
+      else if (def?.file_type === 'dxf' || def?.file_type === 'cad') fn = BUILDERS.dxf;
+      else if (def?.file_type === 'obj') fn = BUILDERS.obj;
+    }
     if (!fn) { console.warn(`[${room.id}] unknown object type "${o.type}"`); continue; }
-    try { fn(world, room, o, ctx); } catch (err) { console.warn(`[${room.id}] could not build ${o.type} "${o.id}":`, err.message); }
+    try { fn(world, room, o, ctx, def); } catch (err) { console.warn(`[${room.id}] could not build ${o.type} "${o.id}":`, err.message); }
   }
 
   // Safety net: nothing may ever trap the player on arrival, even if data was edited by hand.

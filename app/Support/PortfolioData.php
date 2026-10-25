@@ -10,27 +10,29 @@ use Illuminate\Support\Arr;
  */
 class PortfolioData
 {
-    public function __construct(private readonly PortfolioStore $store)
-    {
-    }
+    public function __construct(
+        private readonly PortfolioStore $store,
+        private readonly LibraryStore $library
+    ) {}
 
     public function all(): array
     {
         $c = $this->store->content();
 
         return [
-            'owner'    => $c['owner'],
-            'profile'  => $c['profile'],
-            'skills'   => $c['skills'],
+            'owner' => $c['owner'],
+            'profile' => $c['profile'],
+            'skills' => $c['skills'],
             'timeline' => $c['timeline'],
             // the address messages are mailed to never leaves the server
-            'contact'  => Arr::except($c['contact'], ['receive_email']),
-            'rooms'    => $c['rooms'],
+            'contact' => Arr::except($c['contact'], ['receive_email']),
+            'rooms' => $c['rooms'],
             'settings' => $c['settings'],
-            'cv'       => [
-                'page_url'     => route('cv'),
+            'library' => $this->library->all(),
+            'cv' => [
+                'page_url' => route('cv'),
                 'download_url' => route('cv.download'),
-                'has_pdf'      => $this->cvPdfPath() !== null,
+                'has_pdf' => $this->cvPdfPath() !== null,
             ],
             'endpoints' => [
                 'contact' => route('contact.send'),

@@ -19,6 +19,7 @@
         "@laravel/multiplex": "^0.4.1"
     },
     "dependencies": {
+        "@rolldown/binding-win32-x64-msvc": "^1.2.15",
         "three": "^0.186.1"
     }
 }

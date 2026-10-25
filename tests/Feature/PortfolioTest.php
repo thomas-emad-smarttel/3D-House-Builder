@@ -48,8 +48,8 @@ class PortfolioTest extends TestCase
     public function test_contact_form_accepts_valid_message(): void
     {
         $this->postJson('/contact', [
-            'name'    => 'Visitor',
-            'email'   => 'visitor@example.test',
+            'name' => 'Visitor',
+            'email' => 'visitor@example.test',
             'message' => 'Hello, I would like to talk about a project.',
         ])->assertOk()->assertJson(['ok' => true]);
     }
@@ -57,8 +57,8 @@ class PortfolioTest extends TestCase
     public function test_honeypot_submissions_are_silently_dropped(): void
     {
         $this->postJson('/contact', [
-            'name'    => 'Bot',
-            'email'   => 'bot@example.test',
+            'name' => 'Bot',
+            'email' => 'bot@example.test',
             'message' => 'Buy cheap things from my website now.',
             'website' => 'http://spam.test',
         ])->assertOk();

@@ -11,10 +11,12 @@ export function makeAabb(x, z, w, d, rotY = 0) {
 }
 
 export function resolveCollisions(p, radius, colliders, bounds) {
+  if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) return;
   for (let pass = 0; pass < 3; pass++) {
     let moved = false;
     for (const c of colliders) {
       if (c.enabled === false) continue;
+      if (!Number.isFinite(c.minX) || !Number.isFinite(c.maxX) || !Number.isFinite(c.minZ) || !Number.isFinite(c.maxZ)) continue;
       const cx = Math.max(c.minX, Math.min(p.x, c.maxX));
       const cz = Math.max(c.minZ, Math.min(p.z, c.maxZ));
       let dx = p.x - cx; let dz = p.z - cz;
@@ -46,6 +48,7 @@ export function resolveCollisions(p, radius, colliders, bounds) {
 export function blocked(x, z, radius, colliders) {
   for (const c of colliders) {
     if (c.enabled === false) continue;
+    if (!Number.isFinite(c.minX) || !Number.isFinite(c.maxX) || !Number.isFinite(c.minZ) || !Number.isFinite(c.maxZ)) continue;
     const cx = Math.max(c.minX, Math.min(x, c.maxX));
     const cz = Math.max(c.minZ, Math.min(z, c.maxZ));
     if ((x - cx) ** 2 + (z - cz) ** 2 < radius * radius) return true;

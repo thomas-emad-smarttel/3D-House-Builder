@@ -159,3 +159,43 @@ a { color: inherit; }
 .issue.error span:first-child { color: var(--bad); font-weight: 700; }
 .issue.warn span:first-child { color: #a8791b; font-weight: 700; }
 @media (max-width: 1100px) { .designer-body { grid-template-columns: 1fr; } .palette, .inspector { position: static; max-height: none; } .palette-group { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+
+/* ------------------------------------------------------------ object library */
+.library-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
+.library-search { flex: 1; min-width: 220px; }
+.library-filters { display: flex; gap: 10px; flex-wrap: wrap; }
+.library-filters select { font: 500 0.88rem var(--body); padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+.library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-top: 14px; }
+.library-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.15s, box-shadow 0.15s; }
+.library-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06); }
+.library-thumb { width: 100%; height: 140px; background: #0f172a; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border-bottom: 1px solid var(--line); padding: 8px; }
+.library-thumb svg { width: 100%; height: 100%; object-fit: contain; }
+.library-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.library-thumb .builtin-icon { font-size: 3.5rem; }
+.library-meta { padding: 12px 14px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.library-meta h4 { font-size: 1rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.library-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.badge { font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+.badge-svg { background: #0284c7; color: #fff; }
+.badge-dxf { background: #10b981; color: #fff; }
+.badge-obj { background: #8b5cf6; color: #fff; }
+.badge-builtin { background: #64748b; color: #fff; }
+.badge-cat { background: rgba(0, 0, 0, 0.07); color: var(--mute); }
+.library-specs { font-size: 0.8rem; color: var(--mute); }
+.library-actions { margin-top: auto; padding-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.library-actions .btn-small { margin-top: 0; flex: 1; text-align: center; justify-content: center; }
+
+/* Modal */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(2px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal-box { background: var(--card); border: 1px solid var(--line); border-radius: 18px; width: min(600px, 100%); max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modal-head h3 { font-size: 1.3rem; margin: 0; }
+.dropzone { border: 2px dashed var(--line); border-radius: 14px; padding: 32px 20px; text-align: center; background: rgba(0,0,0,0.02); cursor: pointer; margin-bottom: 16px; transition: border-color 0.15s, background 0.15s; }
+.dropzone:hover, .dropzone.dragover { border-color: var(--brass); background: rgba(185, 138, 62, 0.08); }
+.dropzone-icon { font-size: 2.4rem; margin-bottom: 8px; }
+.preview-box { width: 100%; height: 220px; background: #0f172a; border-radius: 12px; margin-bottom: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 12px; }
+.preview-box svg { max-width: 100%; max-height: 100%; object-fit: contain; }
+.table-specs { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 12px 0 18px; }
+.table-specs td, .table-specs th { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+.table-specs th { color: var(--mute); font-weight: 500; width: 35%; }
+

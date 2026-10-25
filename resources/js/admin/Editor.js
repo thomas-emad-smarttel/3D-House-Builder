@@ -6,6 +6,8 @@ import { ownerSection, profileSection, skillsSection, timelineSection, contactSe
 import { roomsSection, newCustomRoom } from './rooms.js';
 import { designerSection } from './designer/Designer.js';
 import { mediaSection, historySection } from './library.js';
+import { objectLibrarySection } from './library/objectLibrarySection.js';
+import { syncLibrary } from '../scenes/custom/library.js';
 
 const SECTIONS = [
   { id: 'owner', label: 'Site and owner', render: ownerSection, prefixes: ['owner'] },
@@ -15,6 +17,7 @@ const SECTIONS = [
   { id: 'contact', label: 'Contact and CV', render: contactSection, prefixes: ['contact', 'cv_file'] },
   { id: 'rooms', label: 'Rooms and projects', render: roomsSection, prefixes: ['rooms'] },
   { id: 'designer', label: 'Room designer', render: designerSection, prefixes: [] },
+  { id: 'library', label: 'Object library', render: objectLibrarySection, prefixes: [] },
   { id: 'settings', label: 'Game settings', render: settingsSection, prefixes: ['settings'] },
   { id: 'media', label: 'Media library', render: mediaSection, prefixes: [] },
   { id: 'history', label: 'History and reset', render: historySection, prefixes: [] },
@@ -68,6 +71,7 @@ export class Editor {
     try {
       const data = await api('GET', this.urls.content);
       this.meta = data.meta; this.state = hydrate(data.content);
+      if (Array.isArray(data.library)) syncLibrary(data.library);
     } catch (e) {
       this.root.replaceChildren(el('p', { class: 'error', role: 'alert', text: e.message }));
       return;
@@ -95,6 +99,7 @@ export class Editor {
 
   async replaceContent(data) {
     this.meta = data.meta; this.state = hydrate(data.content);
+    if (Array.isArray(data.library)) syncLibrary(data.library);
     this.errors = {}; this.dirty = false; this.openSet.clear(); this.designers.clear();
     this.updateStatus(); this.render();
   }

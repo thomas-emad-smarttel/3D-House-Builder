@@ -31,10 +31,10 @@ return [
 
     /* ---------------------------------------------------------------- owner */
     'owner' => [
-        'name'        => 'Your Name',
-        'title'       => 'Software Engineer',
-        'tagline'     => 'Replace the name, title and tagline in config/portfolio.php.',
-        'location'    => null,
+        'name' => 'Your Name',
+        'title' => 'Software Engineer',
+        'tagline' => 'Replace the name, title and tagline in config/portfolio.php.',
+        'location' => null,
         'placeholder' => true,
     ],
 
@@ -47,27 +47,27 @@ return [
 
     /* -------------------------------------------------------------- contact */
     'contact' => [
-        'email'        => null,   // e.g. 'you@example.com'
-        'linkedin'     => null,   // full URL
-        'github'       => null,   // full URL
+        'email' => null,   // e.g. 'you@example.com'
+        'linkedin' => null,   // full URL
+        'github' => null,   // full URL
         'form_enabled' => true,   // contact form inside the game
         // Where form messages are mailed. Set PORTFOLIO_CONTACT_TO in .env.
         // Without it, messages are written to storage/logs/laravel.log.
         'receive_email' => env('PORTFOLIO_CONTACT_TO'),
-        'placeholder'  => true,
+        'placeholder' => true,
     ],
 
     /* -------------------------------------------------------------- profile */
     'profile' => [
-        'headline'   => 'Developer profile',
-        'intro'      => 'Write a short introduction about who you are and the kind of software you build.',
+        'headline' => 'Developer profile',
+        'intro' => 'Write a short introduction about who you are and the kind of software you build.',
         'philosophy' => 'Describe how you approach engineering: the principles you work by.',
-        'expertise'  => [
+        'expertise' => [
             'Replace with your first area of expertise',
             'Replace with your second area of expertise',
             'Replace with your third area of expertise',
         ],
-        'goals'       => [
+        'goals' => [
             'Describe where you want your career to go next',
         ],
         'placeholder' => true,

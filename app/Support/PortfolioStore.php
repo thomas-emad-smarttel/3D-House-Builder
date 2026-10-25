@@ -18,7 +18,9 @@ use Illuminate\Support\Facades\DB;
 class PortfolioStore
 {
     public const KEY = 'content';
+
     public const MAX_REVISIONS = 40;
+
     private const CACHE = 'portfolio.content.v1';
 
     private ?array $memo = null;

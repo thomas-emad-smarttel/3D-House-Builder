@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Support\LibraryStore;
+use App\Support\PortfolioStore;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -11,7 +13,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(PortfolioStore::class);
+        $this->app->singleton(LibraryStore::class);
     }
 
     /**

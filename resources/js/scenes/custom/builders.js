@@ -1,9 +1,12 @@
 import * as THREE from 'three';
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { M, makeCanvas, FONT_DISPLAY, FONT_BODY } from '../../game/materials.js';
 import { desk, chair, sofa, table, plant, bookshelf, floorLamp, deskMonitor, sign, canvasPlane } from '../../game/props.js';
 import { moduleScreen } from '../../game/props.js';
 import { overviewPodium, textBoard, totem, hologram } from '../roomKit.js';
-import { RADIANS } from './catalog.js';
+import { RADIANS, typeDef } from './catalog.js';
 
 /*
  * One builder per catalog object type. Each receives (world, room, o, ctx) with
@@ -36,6 +39,45 @@ function pictureCard(w, h, label, caption) {
   if (caption) { g.font = `400 ${canvas.height * 0.08}px ${FONT_BODY}`; g.fillText(caption, canvas.width / 2, canvas.height * 0.72, canvas.width - 40); }
   const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
+}
+
+const objModelCache = new Map();
+
+function loadObjTemplate(filePath, mtlPath) {
+  const cacheKey = `${filePath}::${mtlPath || 'nomtl'}`;
+  if (objModelCache.has(cacheKey)) {
+    return objModelCache.get(cacheKey);
+  }
+
+  const promise = new Promise((resolve, reject) => {
+    if (mtlPath) {
+      try {
+        const mtlLoader = new MTLLoader();
+        mtlLoader.load(mtlPath, (materials) => {
+          materials.preload();
+          const objLoader = new OBJLoader();
+          objLoader.setMaterials(materials);
+          objLoader.load(filePath, (loaded) => resolve(loaded), undefined, (err) => {
+            console.warn(`[3D] Error loading OBJ with MTL (${filePath}), retrying without MTL:`, err);
+            const fallbackLoader = new OBJLoader();
+            fallbackLoader.load(filePath, (loaded) => resolve(loaded), undefined, reject);
+          });
+        }, undefined, () => {
+          const fallbackLoader = new OBJLoader();
+          fallbackLoader.load(filePath, (loaded) => resolve(loaded), undefined, reject);
+        });
+      } catch (err) {
+        const fallbackLoader = new OBJLoader();
+        fallbackLoader.load(filePath, (loaded) => resolve(loaded), undefined, reject);
+      }
+    } else {
+      const objLoader = new OBJLoader();
+      objLoader.load(filePath, (loaded) => resolve(loaded), undefined, reject);
+    }
+  });
+
+  objModelCache.set(cacheKey, promise);
+  return promise;
 }
 
 export const BUILDERS = {
@@ -168,6 +210,242 @@ export const BUILDERS = {
 
   light(world, room, o) {
     world.light(new THREE.PointLight(o.p.color, o.p.intensity, o.p.distance, 2), o.x, o.p.y, o.z);
+  },
+
+  svg(world, room, o, ctx, passedDef) {
+    const def = passedDef || typeDef(o.library_id || o.type);
+    const p = o.p || {};
+    const w = Number(p.w || 2);
+    const d = Number(p.d || 2);
+    const h = Number(p.h || 1.2);
+    const y = Number(p.y || 0);
+    const rotY = RADIANS(o.rot || 0);
+    const color = p.color || def?.color || '#38bdf8';
+
+    // Base pedestal
+    world.box({
+      x: o.x, y: y + 0.02, z: o.z,
+      w, h: 0.04, d,
+      rotY,
+      material: M.solid('#1e293b', { rough: 0.7 }),
+      cast: true,
+      collide: !!p.collide && y < 2.2,
+    });
+
+    let builtVisual = false;
+    if (def?.thumbnail_path && typeof globalThis.DOMParser !== 'undefined') {
+      try {
+        const loader = new SVGLoader();
+        const svgRes = loader.parse(def.thumbnail_path);
+        if (svgRes && svgRes.paths && svgRes.paths.length > 0) {
+          const group = new THREE.Group();
+          const vb = def.metadata?.view_box || { width: 100, height: 100 };
+          const scaleX = w / (vb.width || 100);
+          const scaleY = h / (vb.height || 100);
+
+          for (const path of svgRes.paths) {
+            const mat = new THREE.MeshStandardMaterial({
+              color: path.color ? `#${path.color.getHexString()}` : color,
+              roughness: 0.5,
+              metalness: 0.2,
+              side: THREE.DoubleSide,
+            });
+            const shapes = SVGLoader.createShapes(path);
+            for (const shape of shapes) {
+              const geom = new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false });
+              const mesh = new THREE.Mesh(geom, mat);
+              mesh.castShadow = true;
+              group.add(mesh);
+            }
+          }
+
+          group.scale.set(scaleX, -scaleY, scaleX);
+          group.rotation.y = rotY;
+          group.position.set(o.x - (w / 2) * Math.cos(rotY), y + 0.04 + h, o.z + (w / 2) * Math.sin(rotY));
+          world.scene.add(group);
+          builtVisual = true;
+        }
+      } catch {
+        builtVisual = false;
+      }
+    }
+
+    if (!builtVisual) {
+      // Solid stylized panel fallback
+      world.box({
+        x: o.x, y: y + 0.04 + h / 2, z: o.z,
+        w, h, d: 0.06,
+        rotY,
+        material: M.solid(color, { rough: 0.5, metal: 0.3 }),
+        cast: true,
+      });
+    }
+  },
+
+  dxf(world, room, o, ctx, passedDef) {
+    const def = passedDef || typeDef(o.library_id || o.type);
+    const p = o.p || {};
+    const w = Number(p.w || 2);
+    const d = Number(p.d || 2);
+    const h = Number(p.h || 1.0);
+    const y = Number(p.y || 0);
+    const rotY = RADIANS(o.rot || 0);
+    const color = p.color || def?.color || '#38bdf8';
+
+    // CAD Drafting Table / Plinth
+    world.box({
+      x: o.x, y: y + 0.03, z: o.z,
+      w, h: 0.06, d,
+      rotY,
+      material: M.solid('#0f172a', { rough: 0.4, metal: 0.8 }),
+      cast: true,
+      collide: !!p.collide && y < 2.2,
+    });
+
+    const entities = def?.metadata?.entities || [];
+    const bbox = def?.metadata?.bbox || { min_x: 0, min_y: 0, max_x: w, max_y: d };
+    const bw = Math.max(0.001, (bbox.max_x - bbox.min_x));
+    const bd = Math.max(0.001, (bbox.max_y - bbox.min_y));
+
+    const linePoints = [];
+    for (const ent of entities) {
+      if (ent.type === 'LINE') {
+        const x1 = ((ent.x - bbox.min_x) / bw - 0.5) * (w * 0.9);
+        const z1 = ((ent.y - bbox.min_y) / bd - 0.5) * (d * 0.9);
+        const x2 = ((ent.x2 - bbox.min_x) / bw - 0.5) * (w * 0.9);
+        const z2 = ((ent.y2 - bbox.min_y) / bd - 0.5) * (d * 0.9);
+        linePoints.push(new THREE.Vector3(x1, 0.07, z1), new THREE.Vector3(x2, 0.07, z2));
+      } else if (ent.type === 'LWPOLYLINE' && ent.vertices && ent.vertices.length > 1) {
+        for (let i = 0; i < ent.vertices.length - 1; i++) {
+          const p1 = ent.vertices[i];
+          const p2 = ent.vertices[i + 1];
+          const x1 = ((p1[0] - bbox.min_x) / bw - 0.5) * (w * 0.9);
+          const z1 = ((p1[1] - bbox.min_y) / bd - 0.5) * (d * 0.9);
+          const x2 = ((p2[0] - bbox.min_x) / bw - 0.5) * (w * 0.9);
+          const z2 = ((p2[1] - bbox.min_y) / bd - 0.5) * (d * 0.9);
+          linePoints.push(new THREE.Vector3(x1, 0.07, z1), new THREE.Vector3(x2, 0.07, z2));
+        }
+      }
+    }
+
+    if (linePoints.length > 0) {
+      const geom = new THREE.BufferGeometry().setFromPoints(linePoints);
+      const mat = new THREE.LineBasicMaterial({ color: new THREE.Color(color), linewidth: 2 });
+      const lineMesh = new THREE.LineSegments(geom, mat);
+      lineMesh.rotation.y = rotY;
+      lineMesh.position.set(o.x, y, o.z);
+      world.scene.add(lineMesh);
+    } else {
+      // Stylized CAD blueprint grid frame
+      world.box({
+        x: o.x, y: y + 0.065, z: o.z,
+        w: w * 0.85, h: 0.01, d: d * 0.85,
+        rotY,
+        material: M.solid(color, { rough: 0.3, metal: 0.5 }),
+      });
+    }
+  },
+
+  obj(world, room, o, ctx, passedDef) {
+    const def = passedDef || typeDef(o.library_id || o.type);
+    const p = o.p || {};
+    const w = Number(p.w || 2);
+    const d = Number(p.d || 1);
+    const h = Number(p.h || 0.9);
+    const y = Number(p.y || 0);
+    const rotY = RADIANS(o.rot || 0);
+    const color = p.color || def?.color || '#8b5cf6';
+    const solid = !!p.collide && y < 2.2;
+
+    if (solid) {
+      world.collider(o.x, o.z, w, d, rotY);
+    }
+
+    const container = new THREE.Group();
+    container.position.set(o.x, y, o.z);
+    container.rotation.y = rotY;
+    world.scene.add(container);
+
+    // Initial placeholder mesh: visible immediately so the room is never empty
+    const geom = new THREE.BoxGeometry(w, h, d);
+    const mat = M.solid(color, { rough: 0.5, metal: 0.1 });
+    const placeholder = new THREE.Mesh(geom, mat);
+    placeholder.position.y = h / 2;
+    placeholder.castShadow = true;
+    placeholder.receiveShadow = true;
+    container.add(placeholder);
+
+    const rawPath = def?.file_path || def?.definition?.file_path;
+    const filePath = rawPath ? (rawPath.startsWith('/') ? rawPath : '/' + rawPath) : null;
+    const rawMtl = def?.mtl_path || def?.definition?.mtl_path;
+    const mtlPath = rawMtl ? (rawMtl.startsWith('/') ? rawMtl : '/' + rawMtl) : null;
+
+    if (typeof window === 'undefined' || !filePath) {
+      return;
+    }
+
+    const attachObj = (template) => {
+      try {
+        const loaded = template.clone(true);
+        const box = new THREE.Box3().setFromObject(loaded);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+
+        // Center mesh horizontally and place bottom at y=0
+        loaded.position.x = -center.x;
+        loaded.position.y = -box.min.y;
+        loaded.position.z = -center.z;
+
+        const sx = size.x > 0.0001 ? w / size.x : 1;
+        const sy = size.y > 0.0001 ? h / size.y : 1;
+        const sz = size.z > 0.0001 ? d / size.z : 1;
+
+        const wrapper = new THREE.Group();
+        wrapper.add(loaded);
+        wrapper.scale.set(sx, sy, sz);
+
+        loaded.traverse((child) => {
+          if (child.isMesh) {
+            const faceCount = child.geometry?.index
+              ? (child.geometry.index.count / 3)
+              : (child.geometry?.attributes?.position?.count / 3 || 0);
+            child.castShadow = faceCount < 50000;
+            child.receiveShadow = true;
+            if (!mtlPath || !child.material) {
+              child.material = M.solid(color, { rough: 0.6, metal: 0.1 });
+            } else if (child.material) {
+              const m = Array.isArray(child.material) ? child.material[0] : child.material;
+              const isPureBlack = !m?.map && m?.color && m.color.r === 0 && m.color.g === 0 && m.color.b === 0;
+              if (isPureBlack) {
+                child.material = M.solid(color, { rough: 0.6, metal: 0.1 });
+              }
+            }
+            if (child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach((m) => { if (m) m.side = THREE.DoubleSide; });
+              } else {
+                child.material.side = THREE.DoubleSide;
+              }
+            }
+          }
+        });
+
+        // Swap placeholder with the loaded high-detail mesh
+        container.remove(placeholder);
+        placeholder.geometry?.dispose();
+        container.add(wrapper);
+      } catch (err) {
+        console.warn(`[3D] Failed to attach mesh for ${o.id}:`, err);
+      }
+    };
+
+    loadObjTemplate(filePath, mtlPath)
+      .then((template) => attachObj(template))
+      .catch((err) => {
+        console.warn(`[3D] Failed to load OBJ ${filePath}:`, err);
+      });
   },
 };
 
