@@ -5,6 +5,7 @@ import { AudioEngine } from './game/Audio.js';
 import { createUi } from './ui/index.js';
 import { Game } from './game/Game.js';
 import { $ } from './ui/dom.js';
+import { SETTINGS } from './config/settings.js';
 
 function webglSupported() {
   try {
@@ -28,7 +29,15 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
 async function main() {
   const data = loadPortfolio();
+  // Dashboard settings override the defaults before anything is built.
+  const st = data.settings ?? {};
+  Object.assign(SETTINGS.render, {
+    shadows: st.shadows ?? SETTINGS.render.shadows,
+    maxPixelRatio: st.max_pixel_ratio ?? SETTINGS.render.maxPixelRatio,
+    exposure: st.exposure ?? SETTINGS.render.exposure,
+  });
   const progress = new Progress(data.rooms.length);
+  progress.prune(data.rooms.map((r) => r.id));
   const audio = new AudioEngine();
   const handlers = {};
   const ui = createUi({ data, audio, progress, handlers });
@@ -48,6 +57,11 @@ async function main() {
     handlers.travel = (id) => game.travel(id);
     handlers.panelClosed = () => game.panelClosed();
     await game.init();
+    const wanted = new URLSearchParams(location.search).get('room');
+    if (wanted && data.roomsById[wanted]) {
+      game.pendingRoom = wanted;
+      $('chk-skip').checked = true;   // straight into the room after pressing Start
+    }
 
     ui.loading.set(1, 'Ready');
     ui.loading.hide();

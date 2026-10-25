@@ -113,6 +113,27 @@ export class Panel {
     });
   }
 
+  /* -------------------------------------------------------------- info */
+  /** Free-form panel used by info points, text boards and pictures in custom rooms. */
+  openInfo({ title, body, link, link_label: linkLabel, media }) {
+    this.open({
+      title: title || 'Details',
+      render: (b) => {
+        const paragraphs = String(body ?? '').split(/\n+/).map((t) => t.trim()).filter(Boolean);
+        paragraphs.forEach((t) => b.append(this.para(t)));
+        if (media && media.src && isSafeUrl(media.src)) {
+          b.append(el('div', { class: 'media' }, el('figure', {},
+            media.type === 'video'
+              ? el('video', { src: media.src, controls: true, preload: 'metadata', playsinline: true })
+              : el('img', { src: media.src, alt: media.caption || title || '' }),
+            media.caption ? el('figcaption', { text: media.caption }) : null)));
+        }
+        if (link && isSafeUrl(link)) b.append(el('div', { class: 'btn-row' }, this.linkBtn(linkLabel || 'Open link', link, 'btn-primary')));
+        if (!paragraphs.length && !media && !link) b.append(this.muted('Nothing here yet.'));
+      },
+    });
+  }
+
   /* ----------------------------------------------------------- profile */
   openProfile(focus) {
     const { owner, profile } = this.data;

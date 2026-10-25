@@ -45,10 +45,7 @@
     <div class="welcome-card">
         <p class="welcome-name" id="welcome-name">{{ $portfolio['owner']['name'] }}</p>
         <h1 id="welcome-title">Developer Portfolio Experience</h1>
-        <p class="welcome-lead">
-            This CV is a house. Walk through it, open the doors, and see what I have built.
-            The big door at the end of the hall is the project I am proudest of.
-        </p>
+        <p class="welcome-lead">{{ $portfolio['settings']['welcome_lead'] }}</p>
 
         <div class="welcome-actions">
             <button id="btn-start" class="btn btn-primary" type="button">Start exploring</button>

@@ -29,6 +29,15 @@ export class Progress {
     } catch { /* ignore */ }
   }
 
+  /** Forget rooms that were renamed or deleted in the dashboard, so counts never exceed the total. */
+  prune(validRoomIds) {
+    const ok = new Set(validRoomIds);
+    let changed = false;
+    for (const r of [...this.rooms]) if (!ok.has(r)) { this.rooms.delete(r); changed = true; }
+    for (const m of [...this.modules]) if (!ok.has(m.split(':')[0])) { this.modules.delete(m); changed = true; }
+    if (changed) this.save();
+  }
+
   onChange(fn) { this.listeners.add(fn); fn(this); return () => this.listeners.delete(fn); }
   emit() { this.listeners.forEach((fn) => fn(this)); }
 

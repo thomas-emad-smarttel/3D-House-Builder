@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PortfolioStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -9,9 +10,10 @@ use Illuminate\Support\Facades\Mail;
 
 class ContactController extends Controller
 {
-    public function send(Request $request): JsonResponse
+    public function send(Request $request, PortfolioStore $store): JsonResponse
     {
-        abort_unless(config('portfolio.contact.form_enabled'), 404);
+        $contact = $store->content()['contact'];
+        abort_unless($contact['form_enabled'], 404);
 
         $data = $request->validate([
             'name'    => ['required', 'string', 'max:100'],
@@ -31,7 +33,7 @@ class ContactController extends Controller
             'message' => $data['message'],
         ]);
 
-        $to = config('portfolio.contact.receive_email');
+        $to = $contact['receive_email'];
 
         if ($to) {
             Mail::raw(

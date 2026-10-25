@@ -13,6 +13,7 @@ const loaders = {
   timeline: () => import('./rooms/TimelineRoom.js'),
   contact: () => import('./rooms/ContactRoom.js'),
   generic: () => import('./rooms/GenericRoom.js'),
+  custom: () => import('./rooms/CustomRoom.js'),
 };
 
 /** Starts downloading a room's code; resolves to its build(ctx, room) function. */

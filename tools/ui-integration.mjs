@@ -13,7 +13,7 @@ let html = fs.readFileSync(new URL('resources/views/game.blade.php', root), 'utf
   .replace(/@vite\([^)]*\)/, '')
   .replace('@json($portfolio)', JSON.stringify(data))
   .replace(/\{\{\s*csrf_token\(\)\s*\}\}/g, 'test-token')
-  .replace(/\{\{\s*\$portfolio\['owner'\]\['name'\]\s*\}\}/g, data.owner.name)
+  .replace(/\{\{\s*\$portfolio((?:\['[a-z_]+'\])+)\s*\}\}/g, (_, keys) => keys.match(/'([a-z_]+)'/g).map((k) => k.slice(1, -1)).reduce((o, k) => o[k], data))
   .replace(/\{\{\s*route\('cv\.download'\)\s*\}\}/g, '/cv/download')
   .replace(/\{\{\s*route\('cv'\)\s*\}\}/g, '/cv');
 if (/\{\{|@json|@vite/.test(html)) throw new Error('unrendered Blade directive left in markup');
@@ -122,6 +122,7 @@ ok(game.world.id === 'erp' && game.state === 'play', `travelled to ${game.world.
 const erp = game.world;
 ok(erp.size.w * erp.size.d > 3.5 * Math.max(...data.rooms.filter((r) => r.id !== 'erp').map((r) => 0)) , 'ERP built');
 
+
 console.log('\n[module screen -> panel with placeholder + safe links]');
 const hrMod = data.rooms.find((r) => r.id === 'erp').modules[0];
 const it = erp.interactables.find((i) => i.label === `Inspect ${hrMod.name}`);
@@ -133,6 +134,30 @@ ok($('panel-body').textContent.includes('Not provided yet'), 'placeholder sectio
 ok(!!$('panel-tags').textContent.match(/Planned/) && /Placeholder/.test($('panel-tags').textContent), 'status + placeholder tags');
 ok(progress.hasModule('erp', hrMod.id), 'module marked as viewed');
 game.ui.panel.close();
+
+console.log('\n[custom room: info point, text safety, jump-to-room]');
+game.openPause();
+[...$('pause-rooms').querySelectorAll('button')].find((b) => /My Room/.test(b.textContent)).click();
+await sleep(2400); frames(2);
+ok(game.world.id === 'my-room' && game.state === 'play', 'quick travel enters the custom room');
+const infoIt = game.world.interactables.find((i) => /About this room/.test(i.label));
+ok(!!infoIt, 'the info point is interactive');
+game.player.teleport(infoIt.x, infoIt.z + 2.2, 0); frames(2);
+ok(/Read: About this room/.test($('prompt-text').textContent), `prompt: "${$('prompt-text').textContent}"`);
+key('KeyE'); frames(1);
+ok(game.state === 'panel' && $('panel-title').textContent === 'About this room', 'E opens the info panel');
+ok($('panel-body').querySelectorAll('p').length === 2, 'line breaks in the text become separate paragraphs');
+game.ui.panel.close();
+game.ui.panel.openInfo({ title: '<img src=x onerror=window.__pwned2=1>', body: '<script>window.__pwned2=1</script>', link: 'javascript:alert(1)', media: { type: 'image', src: 'javascript:alert(1)' } });
+ok(!window.__pwned2 && !$('panel-body').querySelector('script, a, img'), 'info panel inserts text only and drops javascript: link and image');
+game.ui.panel.openInfo({ title: 'Ok', body: 'x', link: 'https://example.com', link_label: 'Visit', media: { type: 'image', src: '/storage/portfolio/a.png', caption: 'c' } });
+ok($('panel-body').querySelector('a')?.textContent === 'Visit' && $('panel-body').querySelector('img')?.getAttribute('src') === '/storage/portfolio/a.png', 'safe link and site-relative image are shown');
+game.ui.panel.close();
+ok(game.state === 'play', 'closing returns to play');
+game.pendingRoom = 'shipping'; game.afterStart(); await sleep(2400); frames(2);
+ok(game.world.id === 'shipping', 'pendingRoom (?room=) jumps straight into a room');
+game.pendingRoom = 'no-such-room'; game.afterStart(); await sleep(50);
+ok(game.world.id === 'shipping' && !game.busy, 'an unknown ?room= is ignored safely');
 
 console.log('\n[panel content is inert (XSS) and unsafe links dropped]');
 game.ui.panel.openModule({ id: 'x', name: 'X', accent: '#fff' }, {

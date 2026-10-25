@@ -17,6 +17,7 @@ export const SETTINGS = {
   render: {
     maxPixelRatio: 1.75,
     shadows: true,
+    exposure: 1.15,
   },
   hub: {
     width: 20,

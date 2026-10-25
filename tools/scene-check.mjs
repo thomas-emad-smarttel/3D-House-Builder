@@ -20,6 +20,7 @@ const { loadRoomBuilder } = await import('../resources/js/scenes/index.js');
 const { Player } = await import('../resources/js/game/Player.js');
 const { blocked } = await import('../resources/js/game/collision.js');
 const { SETTINGS } = await import('../resources/js/config/settings.js');
+const cat = (await import('../resources/js/scenes/custom/catalog.js'));
 
 const data = JSON.parse(fs.readFileSync(process.argv[2] ?? 'storage/app/portfolio.json', 'utf8'));
 data.roomsById = Object.fromEntries(data.rooms.map((r) => [r.id, r]));
@@ -103,6 +104,33 @@ for (const r of data.rooms) {
   const build = await loadRoomBuilder(r);
   const w = build(ctx, r);
   check(w, `ROOM ${r.id} [${r.scene}]`);
+}
+
+
+/* ---- custom room with EVERY catalogue object type, plus one deliberately broken object ---- */
+{
+  const gym = data.rooms.find((r) => r.id === 'gym');
+  const objects = [];
+  const grid = { x: -6, z: -4.5 };
+  let i = 0;
+  for (const [type, def] of Object.entries(cat.default.types)) {
+    const p = cat.defaultParams(type);
+    if (type === 'module') p.module = gym.modules[0].id;
+    if (type === 'picture') p.src = '/storage/portfolio/not-there.png';
+    let x = grid.x + (i % 6) * 2.4; let z = grid.z + Math.floor(i / 6) * 2.4; let rot = 0;
+    if (def.wall) { const s = cat.snapToWall(x, z, { w: 20, d: 16 }); if (type === 'sign' || type === 'dashboard') { ({ x, z, rot } = { x: -4 + (i % 3) * 4, z: -7.72, rot: 0 }); } else ({ x, z, rot } = s); }
+    objects.push(cat.newObject(type, objects, x, z, rot)); objects.at(-1).p = p;
+    i++;
+  }
+  objects.push({ id: 'broken', type: 'module', x: 0, z: -7.7, rot: 0, p: { module: 'does-not-exist', w: 3, h: 2, y: 1 } });
+  const room = { id: 'stress', scene: 'custom', kind: 'cv', name: 'Stress', tagline: 't', accent: '#e08fb0', flagship: false,
+    overview: gym.overview, modules: gym.modules, layout: { size: { w: 20, d: 16, h: 5 }, theme: { floor: 'marble', wall: 'ink', ceiling: 'graphite', light: 'accent', brightness: 1.2, bg: '#0b0d11', fog: true, lightbars: true, accent_strip: true, ambient_hz: 90, ambient_bright: 0.7, floor_sound: 'marble' }, objects } };
+  data.rooms.push(room); data.roomsById.stress = room;
+  const warn = console.warn; const warnings = []; console.warn = (...a) => warnings.push(a.join(' '));
+  const world = (await loadRoomBuilder(room))(ctx, room);
+  console.warn = warn;
+  if (!warnings.some((w) => /broken/.test(w))) fail('a broken object should produce a warning but not break the room');
+  check(world, `ROOM stress [custom: all ${Object.keys(cat.default.types).length} object types]`);
 }
 
 /* ---- generic room via an unknown scene key + extra module counts ---- */

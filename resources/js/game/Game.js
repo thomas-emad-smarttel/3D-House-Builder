@@ -29,7 +29,7 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     // ?exposure=1.4 in the URL brightens/darkens everything without touching code.
     const exposure = parseFloat(new URLSearchParams(location.search).get('exposure'));
-    this.renderer.toneMappingExposure = Number.isFinite(exposure) ? exposure : 1.15;
+    this.renderer.toneMappingExposure = Number.isFinite(exposure) ? exposure : SETTINGS.render.exposure;
 
     this.camera = new THREE.PerspectiveCamera(SETTINGS.player.fov, 1, 0.05, 180);
     this.input = new Input(canvas);
@@ -47,6 +47,7 @@ export class Game {
     this.currentRoom = null;
     this.intro = null;
     this.reduced = prefersReducedMotion();
+    this.pendingRoom = null;   // set from ?room=ID (used by the dashboard's "Test in game")
     this.ac = new AbortController();
     this.bind();
     this.resize();
@@ -166,6 +167,7 @@ export class Game {
     if (skip || this.reduced) {
       this.player.teleport(this.hub.spawn.x, this.hub.spawn.z, this.hub.spawn.yaw);
       this.setState('play');
+      this.afterStart();
       return;
     }
     const s = this.hub.spawn;
@@ -191,6 +193,13 @@ export class Game {
     this.player.teleport(this.hub.spawn.x, this.hub.spawn.z, this.hub.spawn.yaw);
     this.setState('play');
     this.capturePointer();
+    this.afterStart();
+  }
+
+  afterStart() {
+    const id = this.pendingRoom;
+    this.pendingRoom = null;
+    if (id) this.travel(id);
   }
 
   /* ---------------------------------------------------------- pause */
@@ -233,6 +242,7 @@ export class Game {
   openSkills(cat) { this.openPanel((p) => p.openSkills(cat)); }
   openTimeline(entry) { this.openPanel((p) => p.openTimeline(entry)); }
   openContact(focus) { this.openPanel((p) => p.openContact(focus)); }
+  openInfo(spec) { this.openPanel((p) => p.openInfo(spec)); }
 
   downloadCv() {
     window.open(this.data.cv.download_url, '_blank', 'noopener');
@@ -338,9 +348,10 @@ export class Game {
 
   /** Quick travel from the pause menu: 'hub' or a room id. */
   async travel(id) {
-    if (this.busy || this.state !== 'pause') return;
+    if (this.busy || !['pause', 'play'].includes(this.state)) return;
+    if (id !== 'hub' && !this.data.roomsById[id]) return;
     this.busy = true;
-    this.ui.menus.closePause();
+    if (this.state === 'pause') this.ui.menus.closePause();
     this.setState('transition');
     const room = id === 'hub' ? null : this.data.roomsById[id];
     const loading = room ? loadRoomBuilder(room) : null;

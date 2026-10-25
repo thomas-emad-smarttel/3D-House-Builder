@@ -35,10 +35,12 @@ export function createRoom(ctx, cfg, o) {
   wall(world, { axis: 'x', at: d / 2, from: -w / 2, to: w / 2, height: h, material: wm, gaps: [{ c: 0, w: 2.68, h: 3.34 }] });
 
   // accent skirting: the room's colour identity at floor level
-  const strip = M.emissive(cfg.accent, 0.9);
-  world.box({ x: 0, y: 0.04, z: -d / 2 + inner + 0.01, w: w - WALL_T, h: 0.05, d: 0.02, material: strip, cast: false });
-  world.box({ x: -w / 2 + inner + 0.01, y: 0.04, z: 0, w: 0.02, h: 0.05, d: d - WALL_T, material: strip, cast: false });
-  world.box({ x: w / 2 - inner - 0.01, y: 0.04, z: 0, w: 0.02, h: 0.05, d: d - WALL_T, material: strip, cast: false });
+  if (o.accentStrip !== false) {
+    const strip = M.emissive(cfg.accent, 0.9);
+    world.box({ x: 0, y: 0.04, z: -d / 2 + inner + 0.01, w: w - WALL_T, h: 0.05, d: 0.02, material: strip, cast: false });
+    world.box({ x: -w / 2 + inner + 0.01, y: 0.04, z: 0, w: 0.02, h: 0.05, d: d - WALL_T, material: strip, cast: false });
+    world.box({ x: w / 2 - inner - 0.01, y: 0.04, z: 0, w: 0.02, h: 0.05, d: d - WALL_T, material: strip, cast: false });
+  }
 
   const exit = door(world, { x: 0, z: d / 2, inward: 'z-', accent: cfg.accent });
   world.exitDoor = exit;

@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Support\PortfolioStore;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class PortfolioTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_game_page_loads_with_embedded_data(): void
     {
         $this->get('/')
@@ -16,7 +20,10 @@ class PortfolioTest extends TestCase
 
     public function test_game_data_never_leaks_the_receiving_address(): void
     {
-        config(['portfolio.contact.receive_email' => 'secret-inbox@example.test']);
+        $store = app(PortfolioStore::class);
+        $content = $store->defaults();
+        $content['contact']['receive_email'] = 'secret-inbox@example.test';
+        $store->save($content);
 
         $this->get('/')->assertOk()->assertDontSee('secret-inbox@example.test');
     }
@@ -28,8 +35,6 @@ class PortfolioTest extends TestCase
 
     public function test_cv_download_falls_back_to_printable_page(): void
     {
-        config(['portfolio.cv_file' => null]);
-
         $this->get('/cv/download')->assertRedirect(route('cv', ['print' => 1]));
     }
 

@@ -31,7 +31,7 @@ return [
 
     /* ---------------------------------------------------------------- owner */
     'owner' => [
-        'name'        => 'Islam Aly',
+        'name'        => 'Your Name',
         'title'       => 'Software Engineer',
         'tagline'     => 'Replace the name, title and tagline in config/portfolio.php.',
         'location'    => null,
@@ -47,7 +47,7 @@ return [
 
     /* -------------------------------------------------------------- contact */
     'contact' => [
-        'email'        => 'islam.aly1996@gmail.com',   // e.g. 'you@example.com'
+        'email'        => null,   // e.g. 'you@example.com'
         'linkedin'     => null,   // full URL
         'github'       => null,   // full URL
         'form_enabled' => true,   // contact form inside the game
@@ -163,6 +163,34 @@ return [
             'name' => 'Career Timeline',
             'tagline' => 'A walk through the roles and projects behind the work.',
             'accent' => '#e0b26a',
+        ],
+
+        /* ---- A room you design yourself (open it in Dashboard > Room designer) ---- */
+        [
+            'id' => 'my-room', 'scene' => 'custom', 'kind' => 'cv',
+            'name' => 'My Room',
+            'tagline' => 'A space I arranged myself: desk, shelves and a few stories.',
+            'accent' => '#e08fb0',
+            'layout' => [
+                'size' => ['w' => 20, 'd' => 16, 'h' => 5],
+                'theme' => ['floor' => 'wood', 'wall' => 'plaster', 'light' => 'warm'],
+                // Partial params are fine: anything left out gets the object's default.
+                'objects' => [
+                    ['id' => 'sign-1', 'type' => 'sign', 'x' => 0, 'z' => -7.72, 'rot' => 0,
+                        'p' => ['title' => 'My room', 'sub' => 'Placeholder: tell visitors what this room is.', 'w' => 4, 'y' => 3.3]],
+                    ['id' => 'workstation-1', 'type' => 'workstation', 'x' => 0, 'z' => -5.4, 'rot' => 0, 'p' => ['w' => 2.6, 'monitors' => 2]],
+                    ['id' => 'bookshelf-1', 'type' => 'bookshelf', 'x' => -9.6, 'z' => -3.5, 'rot' => 90, 'p' => ['w' => 2]],
+                    ['id' => 'bookshelf-2', 'type' => 'bookshelf', 'x' => -9.6, 'z' => -0.8, 'rot' => 90, 'p' => ['w' => 2]],
+                    ['id' => 'sofa-1', 'type' => 'sofa', 'x' => 8.6, 'z' => -1, 'rot' => 270, 'p' => ['w' => 2.4]],
+                    ['id' => 'table-1', 'type' => 'table', 'x' => 6.7, 'z' => -1, 'rot' => 0, 'p' => ['w' => 0.9, 'd' => 1.2]],
+                    ['id' => 'rug-1', 'type' => 'rug', 'x' => 0, 'z' => 0, 'rot' => 0, 'p' => ['w' => 8, 'd' => 6]],
+                    ['id' => 'plant-1', 'type' => 'plant', 'x' => -9, 'z' => -7, 'rot' => 0, 'p' => ['s' => 1.2]],
+                    ['id' => 'plant-2', 'type' => 'plant', 'x' => 9, 'z' => -7, 'rot' => 0, 'p' => ['s' => 1.2]],
+                    ['id' => 'lamp-1', 'type' => 'lamp', 'x' => 9, 'z' => 3, 'rot' => 0, 'p' => []],
+                    ['id' => 'info-1', 'type' => 'info', 'x' => -5, 'z' => 2.5, 'rot' => 0,
+                        'p' => ['title' => 'About this room', 'sub' => 'Press E', 'body' => "Placeholder: write something personal here.\nA second line becomes a second paragraph."]],
+                ],
+            ],
         ],
 
         /* ---- Projects ---- */
