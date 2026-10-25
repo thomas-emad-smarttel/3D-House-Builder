@@ -327,6 +327,10 @@ class LibraryController extends Controller
                             if ($reparsed['valid']) {
                                 $parsed['face_count'] = $reparsed['face_count'];
                                 $parsed['vertex_count'] = $reparsed['vertex_count'];
+                                $parsed['svg'] = $reparsed['svg'];
+                                $parsed['bbox'] = $reparsed['bbox'];
+                                $parsed['dimensions'] = $reparsed['dimensions'];
+                                $parsed['suggested'] = $reparsed['suggested'];
                             }
                         }
                     }

@@ -406,6 +406,16 @@ export const BUILDERS = {
         wrapper.add(loaded);
         wrapper.scale.set(sx, sy, sz);
 
+        const fixMat = (mat) => {
+          if (!mat) return M.solid(color, { rough: 0.6, metal: 0.1 });
+          const isPureBlack = !mat.map && mat.color && mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0;
+          if (isPureBlack) {
+            return M.solid(color, { rough: 0.6, metal: 0.1 });
+          }
+          mat.side = THREE.DoubleSide;
+          return mat;
+        };
+
         loaded.traverse((child) => {
           if (child.isMesh) {
             const faceCount = child.geometry?.index
@@ -414,20 +424,11 @@ export const BUILDERS = {
             child.castShadow = faceCount < 50000;
             child.receiveShadow = true;
             if (!mtlPath || !child.material) {
-              child.material = M.solid(color, { rough: 0.6, metal: 0.1 });
-            } else if (child.material) {
-              const m = Array.isArray(child.material) ? child.material[0] : child.material;
-              const isPureBlack = !m?.map && m?.color && m.color.r === 0 && m.color.g === 0 && m.color.b === 0;
-              if (isPureBlack) {
-                child.material = M.solid(color, { rough: 0.6, metal: 0.1 });
-              }
-            }
-            if (child.material) {
-              if (Array.isArray(child.material)) {
-                child.material.forEach((m) => { if (m) m.side = THREE.DoubleSide; });
-              } else {
-                child.material.side = THREE.DoubleSide;
-              }
+              child.material = fixMat(null);
+            } else if (Array.isArray(child.material)) {
+              child.material = child.material.map(fixMat);
+            } else {
+              child.material = fixMat(child.material);
             }
           }
         });

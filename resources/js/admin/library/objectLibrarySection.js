@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { el } from '../../ui/dom.js';
 import { api, uploadWithProgress } from '../api.js';
 import { syncLibrary, registerLibraryObject, catalog } from '../../scenes/custom/library.js';
@@ -216,6 +219,171 @@ export function objectLibrarySection(ed) {
     document.body.append(backdrop);
   }
 
+  function renderLive3DPreview(previewBox, item) {
+    const rawPath = item.file_path || item.definition?.file_path;
+    const filePath = rawPath ? (rawPath.startsWith('/') ? rawPath : '/' + rawPath) : null;
+    const rawMtl = item.metadata?.mtl_url || item.metadata?.mtl_path || item.definition?.mtl_path;
+    const mtlPath = rawMtl ? (rawMtl.startsWith('/') ? rawMtl : '/' + rawMtl) : null;
+
+    if (!filePath) return null;
+
+    previewBox.style.height = '280px';
+    previewBox.style.position = 'relative';
+    previewBox.style.overflow = 'hidden';
+    previewBox.style.background = '#090d16';
+    previewBox.replaceChildren(el('p', { class: 'loading', text: 'Loading 3D sofa preview…' }));
+
+    const w = previewBox.clientWidth || 380;
+    const h = 280;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#090d16');
+
+    const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+    camera.position.set(0, 0.35, 2.4);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    scene.add(new THREE.HemisphereLight('#f8fafc', '#334155', 1.4));
+    const sun = new THREE.DirectionalLight('#ffffff', 2.0);
+    sun.position.set(3, 4, 3);
+    scene.add(sun);
+    const fillLight = new THREE.DirectionalLight('#c084fc', 0.8);
+    fillLight.position.set(-3, 2, -2);
+    scene.add(fillLight);
+    scene.add(new THREE.AmbientLight('#ffffff', 0.7));
+
+    const modelGroup = new THREE.Group();
+    modelGroup.rotation.y = 0.35;
+    scene.add(modelGroup);
+
+    const defColor = item.definition?.color || item.definition?.params?.color?.default || '#8b5cf6';
+    let animId = null;
+
+    const fixMat = (mat) => {
+      if (!mat) return new THREE.MeshStandardMaterial({ color: defColor, roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide });
+      const isPureBlack = !mat.map && mat.color && mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0;
+      if (isPureBlack) {
+        return new THREE.MeshStandardMaterial({ color: defColor, roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide });
+      }
+      mat.side = THREE.DoubleSide;
+      return mat;
+    };
+
+    const onModelLoaded = (loaded) => {
+      const box = new THREE.Box3().setFromObject(loaded);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+
+      loaded.position.set(-center.x, -center.y, -center.z);
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      const scale = 2.0 / maxDim;
+      modelGroup.scale.set(scale, scale, scale);
+
+      loaded.traverse((child) => {
+        if (child.isMesh) {
+          if (!mtlPath || !child.material) {
+            child.material = fixMat(null);
+          } else if (Array.isArray(child.material)) {
+            child.material = child.material.map(fixMat);
+          } else {
+            child.material = fixMat(child.material);
+          }
+        }
+      });
+
+      modelGroup.add(loaded);
+      previewBox.replaceChildren(renderer.domElement);
+
+      const hintBadge = el('div', {
+        style: {
+          position: 'absolute', bottom: '8px', right: '10px',
+          background: 'rgba(15,23,42,0.85)', color: '#94a3b8',
+          padding: '3px 8px', borderRadius: '4px', fontSize: '0.72rem', pointerEvents: 'none',
+        },
+        text: '🖱 Drag to rotate 3D view',
+      });
+      previewBox.append(hintBadge);
+    };
+
+    const objLoader = new OBJLoader();
+    if (mtlPath) {
+      const mtlLoader = new MTLLoader();
+      mtlLoader.load(mtlPath, (mats) => {
+        mats.preload();
+        objLoader.setMaterials(mats);
+        objLoader.load(filePath, onModelLoaded, undefined, () => {
+          const fallback = new OBJLoader();
+          fallback.load(filePath, onModelLoaded);
+        });
+      }, undefined, () => {
+        const fallback = new OBJLoader();
+        fallback.load(filePath, onModelLoaded);
+      });
+    } else {
+      objLoader.load(filePath, onModelLoaded);
+    }
+
+    let isDragging = false;
+    let prevX = 0;
+    let prevY = 0;
+    const canvas = renderer.domElement;
+    canvas.style.cursor = 'grab';
+
+    const onDown = (e) => {
+      isDragging = true;
+      prevX = e.clientX;
+      prevY = e.clientY;
+      canvas.style.cursor = 'grabbing';
+    };
+    const onMove = (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - prevX;
+      const dy = e.clientY - prevY;
+      modelGroup.rotation.y += dx * 0.012;
+      modelGroup.rotation.x += dy * 0.012;
+      prevX = e.clientX;
+      prevY = e.clientY;
+    };
+    const onUp = () => {
+      isDragging = false;
+      canvas.style.cursor = 'grab';
+    };
+
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      const curW = previewBox.clientWidth;
+      const curH = previewBox.clientHeight || 280;
+      if (curW > 0 && curH > 0 && (renderer.domElement.width !== curW || renderer.domElement.height !== curH)) {
+        renderer.setSize(curW, curH, false);
+        camera.aspect = curW / curH;
+        camera.updateProjectionMatrix();
+      }
+      if (!isDragging) {
+        modelGroup.rotation.y += 0.007;
+      }
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      renderer.dispose();
+    };
+  }
+
   async function openDetailsModal(item) {
     let usage = [];
     try {
@@ -228,19 +396,28 @@ export function objectLibrarySection(ed) {
     const def = item.definition || {};
     const p = def.params || {};
 
+    let cleanup3D = null;
+    const previewBox = el('div', { class: 'preview-box', style: { position: 'relative', overflow: 'hidden' } });
+    if (item.file_type === 'obj' && item.file_path) {
+      cleanup3D = renderLive3DPreview(previewBox, item);
+    } else if (item.thumbnail_path) {
+      previewBox.innerHTML = item.thumbnail_path;
+    } else {
+      previewBox.append(el('span', { class: 'builtin-icon', style: { color: def.color || '#38bdf8' }, text: def.icon || '⬡' }));
+    }
+
+    const closeModal = () => {
+      if (cleanup3D) cleanup3D();
+      backdrop.remove();
+    };
+
     const backdrop = el('div', { class: 'modal-backdrop' },
       el('div', { class: 'modal-box' },
         el('div', { class: 'modal-head' },
           el('h3', { text: item.name }),
-          el('button', { type: 'button', class: 'btn btn-small', text: '✕', onclick: () => backdrop.remove() }),
+          el('button', { type: 'button', class: 'btn btn-small', text: '✕', onclick: closeModal }),
         ),
-        el('div', { class: 'preview-box' },
-          item.thumbnail_path ? (() => {
-            const b = el('div', { style: { width: '100%', height: '100%' } });
-            b.innerHTML = item.thumbnail_path;
-            return b;
-          })() : el('span', { class: 'builtin-icon', style: { color: def.color || '#38bdf8' }, text: def.icon || '⬡' }),
-        ),
+        previewBox,
         el('table', { class: 'table-specs' },
           el('tbody', {},
             el('tr', {}, el('th', { text: 'Identifier' }), el('td', { text: item.id })),
@@ -262,7 +439,7 @@ export function objectLibrarySection(ed) {
             class: 'btn btn-primary',
             text: 'Add to a Room…',
             onclick: () => {
-              backdrop.remove();
+              closeModal();
               promptAddToRoom(item);
             },
           }),
@@ -271,11 +448,11 @@ export function objectLibrarySection(ed) {
             class: 'btn btn-danger',
             text: 'Delete Permanently',
             onclick: () => {
-              backdrop.remove();
+              closeModal();
               deleteObject(item);
             },
           }) : null,
-          el('button', { type: 'button', class: 'btn', text: 'Close', onclick: () => backdrop.remove() }),
+          el('button', { type: 'button', class: 'btn', text: 'Close', onclick: closeModal }),
         ),
       ),
     );

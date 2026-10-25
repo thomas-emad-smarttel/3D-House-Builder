@@ -141,9 +141,11 @@ class ObjParser
             $vertices,
             $faces,
             $minX,
+            $maxX,
+            $minY,
+            $maxY,
             $minZ,
-            $w,
-            $d
+            $maxZ
         );
 
         return [
@@ -246,7 +248,7 @@ class ObjParser
     }
 
     /**
-     * Generate a top-down projected SVG wireframe / footprint thumbnail.
+     * Generate an isometric 3D perspective projected SVG illustration for the thumbnail.
      *
      * @param  list<array{0: float, 1: float, 2: float}>  $vertices
      * @param  list<list<int>>  $faces
@@ -255,65 +257,120 @@ class ObjParser
         array $vertices,
         array $faces,
         float $minX,
+        float $maxX,
+        float $minY,
+        float $maxY,
         float $minZ,
-        float $w,
-        float $d
+        float $maxZ
     ): string {
         $viewW = 200;
         $viewH = 200;
-        $pad = 16;
-        $availW = $viewW - ($pad * 2);
-        $availH = $viewH - ($pad * 2);
+        $pad = 14;
 
-        $scale = min($availW / $w, $availH / $d);
-        $offsetX = $pad + ($availW - ($w * $scale)) / 2;
-        $offsetY = $pad + ($availH - ($d * $scale)) / 2;
+        $cx = ($minX + $maxX) / 2;
+        $cy = ($minY + $maxY) / 2;
+        $cz = ($minZ + $maxZ) / 2;
+
+        $cosY = cos(deg2rad(40));
+        $sinY = sin(deg2rad(40));
+        $cosP = cos(deg2rad(24));
+        $sinP = sin(deg2rad(24));
 
         $vCount = count($vertices);
 
-        // Project sample faces onto top-down X-Z plane
-        $paths = '';
-        $maxSample = min(count($faces), 120);
-        $step = max(1, (int) floor(count($faces) / $maxSample));
+        // First pass: project sample vertices to determine 2D screen bounds
+        $projMinX = INF;
+        $projMaxX = -INF;
+        $projMinY = INF;
+        $projMaxY = -INF;
 
-        for ($fi = 0; $fi < count($faces); $fi += $step) {
-            $f = $faces[$fi];
-            $pts = [];
-            foreach ($f as $idx) {
-                // OBJ 1-based indexing (or negative relative indexing)
-                $realIdx = $idx > 0 ? $idx - 1 : $vCount + $idx;
-                if (isset($vertices[$realIdx])) {
-                    $v = $vertices[$realIdx];
-                    $px = round($offsetX + (($v[0] - $minX) * $scale), 1);
-                    $py = round($offsetY + (($v[2] - $minZ) * $scale), 1);
-                    $pts[] = "{$px},{$py}";
-                }
+        $stepV = max(1, (int) floor($vCount / 300));
+        for ($i = 0; $i < $vCount; $i += $stepV) {
+            $v = $vertices[$i];
+            $rx = ($v[0] - $cx) * $cosY - ($v[2] - $cz) * $sinY;
+            $rz = ($v[0] - $cx) * $sinY + ($v[2] - $cz) * $cosY;
+            $ry = $v[1] - $cy;
+            $sx = $rx;
+            $sy = -($ry * $cosP - $rz * $sinP);
+
+            if ($sx < $projMinX) {
+                $projMinX = $sx;
             }
-
-            if (count($pts) >= 3) {
-                $polyStr = implode(' ', $pts);
-                $paths .= "<polygon points=\"{$polyStr}\" fill=\"#8b5cf6\" fill-opacity=\"0.08\" stroke=\"#a78bfa\" stroke-width=\"0.8\" stroke-linejoin=\"round\" />\n    ";
+            if ($sx > $projMaxX) {
+                $projMaxX = $sx;
+            }
+            if ($sy < $projMinY) {
+                $projMinY = $sy;
+            }
+            if ($sy > $projMaxY) {
+                $projMaxY = $sy;
             }
         }
 
-        // Bounding box frame
-        $bx = round($offsetX, 1);
-        $by = round($offsetY, 1);
-        $bw = round($w * $scale, 1);
-        $bd = round($d * $scale, 1);
+        $pw = max(0.001, $projMaxX - $projMinX);
+        $ph = max(0.001, $projMaxY - $projMinY);
+        $availW = $viewW - ($pad * 2);
+        $availH = $viewH - ($pad * 2);
+        $scale = min($availW / $pw, $availH / $ph);
+
+        $offsetX = $pad + ($availW - ($pw * $scale)) / 2 - ($projMinX * $scale);
+        $offsetY = $pad + ($availH - ($ph * $scale)) / 2 - ($projMinY * $scale);
+
+        // Project and sort faces by depth (painter's algorithm)
+        $maxSample = min(count($faces), 180);
+        $stepF = max(1, (int) floor(count($faces) / $maxSample));
+        $projectedFaces = [];
+
+        for ($fi = 0; $fi < count($faces); $fi += $stepF) {
+            $f = $faces[$fi];
+            $pts = [];
+            $avgDepth = 0;
+            $valid = true;
+
+            foreach ($f as $idx) {
+                $realIdx = $idx > 0 ? $idx - 1 : $vCount + $idx;
+                if (! isset($vertices[$realIdx])) {
+                    $valid = false;
+                    break;
+                }
+                $v = $vertices[$realIdx];
+                $rx = ($v[0] - $cx) * $cosY - ($v[2] - $cz) * $sinY;
+                $rz = ($v[0] - $cx) * $sinY + ($v[2] - $cz) * $cosY;
+                $ry = $v[1] - $cy;
+                $px = round($offsetX + ($rx * $scale), 1);
+                $py = round($offsetY + (-($ry * $cosP - $rz * $sinP) * $scale), 1);
+                $pts[] = "{$px},{$py}";
+                $avgDepth += $rz;
+            }
+
+            if ($valid && count($pts) >= 3) {
+                $avgDepth /= count($pts);
+                $projectedFaces[] = [
+                    'depth' => $avgDepth,
+                    'pts' => implode(' ', $pts),
+                ];
+            }
+        }
+
+        // Sort back-to-front
+        usort($projectedFaces, fn ($a, $b) => $a['depth'] <=> $b['depth']);
+
+        $polygons = '';
+        foreach ($projectedFaces as $pf) {
+            $polygons .= "<polygon points=\"{$pf['pts']}\" fill=\"#8b5cf6\" fill-opacity=\"0.45\" stroke=\"#c084fc\" stroke-width=\"1\" stroke-linejoin=\"round\" />\n    ";
+        }
 
         return <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {$viewW} {$viewH}" width="100%" height="100%" style="background:#090d16;border-radius:6px;">
   <defs>
-    <pattern id="grid3d" width="16" height="16" patternUnits="userSpaceOnUse">
-      <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#1e293b" stroke-width="0.7"/>
-    </pattern>
+    <radialGradient id="thumbglow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#090d16" stop-opacity="0" />
+    </radialGradient>
   </defs>
-  <rect width="100%" height="100%" fill="url(#grid3d)" />
+  <rect width="100%" height="100%" fill="url(#thumbglow)" />
   <g>
-    <rect x="{$bx}" y="{$by}" width="{$bw}" height="{$bd}" fill="none" stroke="#475569" stroke-width="0.8" stroke-dasharray="3,3" rx="2" />
-    {$paths}
-    <circle cx="100" cy="100" r="3" fill="#c084fc" />
+    {$polygons}
   </g>
 </svg>
 SVG;
