@@ -1464,12 +1464,17 @@ let activeElevatorModal = null;
 
 export function showElevatorModal(world, elDef, floors, currentLevel, ctx) {
   if (activeElevatorModal) return;
-  if (document.pointerLockElement) {
+
+  if (ctx?.game) {
+    ctx.game.suppressPause = true;
+    ctx.game.busy = true;
+    ctx.game.releasePointer?.();
+  } else if (document.pointerLockElement) {
     try { document.exitPointerLock(); } catch { /* ignore */ }
   }
 
   const elX = Number(elDef.x ?? 0);
-  const elZ = Number(elDef.z ?? 5.2);
+  const elZ = Number(elDef.z ?? -3.6);
   const depth = Number(elDef.depth ?? 3.6);
 
   const backdrop = document.createElement('div');
@@ -1530,6 +1535,21 @@ export function showElevatorModal(world, elDef, floors, currentLevel, ctx) {
     padding: 16px 20px; overflow-y: auto; flex: 1;
     display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;
   `;
+
+  // Helper to cleanly close modal without pause menu interference
+  const closeElevatorModal = () => {
+    activeElevatorModal = null;
+    backdrop.remove();
+    if (ctx?.game) {
+      ctx.game.suppressPause = false;
+      ctx.game.busy = false;
+      if (ctx.game.state === 'pause') {
+        ctx.game.ui?.menus?.closePause?.();
+        ctx.game.setState('play');
+      }
+      ctx.game.capturePointer?.();
+    }
+  };
 
   // Sort floors descending: Level 19 down to 0 (penthouse on top)
   const sortedFloors = [...floors].sort((a, b) => (b.level ?? 0) - (a.level ?? 0));
@@ -1622,6 +1642,17 @@ export function showElevatorModal(world, elDef, floors, currentLevel, ctx) {
         if (ctx?.ui?.fade) {
           await ctx.ui.fade.in(400);
         }
+
+        // Restore game state cleanly without pause menu
+        if (ctx?.game) {
+          ctx.game.suppressPause = false;
+          ctx.game.busy = false;
+          if (ctx.game.state === 'pause') {
+            ctx.game.ui?.menus?.closePause?.();
+            ctx.game.setState('play');
+          }
+          ctx.game.capturePointer?.();
+        }
       };
     }
 
@@ -1629,14 +1660,10 @@ export function showElevatorModal(world, elDef, floors, currentLevel, ctx) {
   });
 
   const closeBtn = head.querySelector('.close-btn');
-  closeBtn.onclick = () => {
-    activeElevatorModal = null;
-    backdrop.remove();
-  };
+  closeBtn.onclick = closeElevatorModal;
   backdrop.onclick = (e) => {
     if (e.target === backdrop) {
-      activeElevatorModal = null;
-      backdrop.remove();
+      closeElevatorModal();
     }
   };
 
@@ -1776,7 +1803,89 @@ export function buildArchitecturalElevator(world, elDef, floors, ctx, activeLeve
       voidZone: null,
     });
 
-    // 5. Elevator Cabin Enclosure
+    // 5. Central Hallway Exterior Front Facade & Panoramic City Windows (Floors 3-19)
+    // Seamlessly encloses the front of the hotel between Suite 01 and Suite 02
+    if (fl.level >= 3 && isSouth) {
+      const flH = Number(fl.height || 3.4);
+      const frontZ = 2.5;
+
+      // Center Panoramic Glass Curtain Window looking out over the skyline
+      world.box({
+        x: elX,
+        y: elev + 0.35,
+        z: frontZ,
+        w: 4.8,
+        h: flH - 0.45,
+        d: 0.08,
+        material: M.glass('#b8e2f8', 0.4),
+      });
+
+      // Gold architectural frames, spandrels, and mullions
+      world.box({
+        x: elX,
+        y: elev,
+        z: frontZ,
+        w: 7.2,
+        h: 0.35,
+        d: 0.22,
+        material: frameMat,
+        collide: true,
+      });
+      world.box({
+        x: elX,
+        y: elev + flH - 0.2,
+        z: frontZ,
+        w: 7.2,
+        h: 0.2,
+        d: 0.22,
+        material: goldTrim,
+      });
+      world.box({
+        x: elX - 2.4,
+        y: elev,
+        z: frontZ,
+        w: 0.18,
+        h: flH,
+        d: 0.2,
+        material: frameMat,
+      });
+      world.box({
+        x: elX + 2.4,
+        y: elev,
+        z: frontZ,
+        w: 0.18,
+        h: flH,
+        d: 0.2,
+        material: frameMat,
+      });
+
+      // Solid architectural wall piers connecting to Suite 01 and Suite 02
+      world.box({
+        x: elX - 2.95,
+        y: elev,
+        z: frontZ,
+        w: 1.1,
+        h: flH,
+        d: 0.2,
+        material: frameMat,
+        collide: true,
+      });
+      world.box({
+        x: elX + 2.95,
+        y: elev,
+        z: frontZ,
+        w: 1.1,
+        h: flH,
+        d: 0.2,
+        material: frameMat,
+        collide: true,
+      });
+
+      // Window safety boundary
+      world.collider(elX, frontZ, 7.2, 0.25, 0, elev, elev + flH);
+    }
+
+    // 6. Elevator Cabin Enclosure
     // Cabin Floor
     world.box({
       x: elX, y: elev - 0.02, z: elZ,

@@ -547,20 +547,15 @@ function computeFloorWallDeduplication(rooms = []) {
     maxZ: plotD / 2,
   };
 
-  // 8. High-Performance Dynamic Culling for Multi-Story Buildings & Skyscraper Hotels
-  // Culls distant floor meshes and lights, eliminating lag, draw-call stutter, and GPU fragment overhead
+  // 8. High-Performance Dynamic Lighting for Multi-Story Buildings & Skyscraper Hotels
+  // Culls distant room point lights to eliminate GPU fragment shader overhead while keeping all 20 floors' walls visible
   if (isAllFloors && floors.length > 3) {
     const spawnElev = Number(targetFloors[0]?.elevation ?? 0);
 
-    // Initial cull on spawn: keep only lights within 6m and floors within 13m
+    // Initial light cull on spawn: keep only lights on active floor (+-1 level)
     if (world.roomLights) {
       for (const l of world.roomLights) {
         l.visible = Math.abs(l.userData.elevation - spawnElev) <= 6.0;
-      }
-    }
-    if (world.floorGroups) {
-      for (const [lvl, grp] of world.floorGroups) {
-        grp.visible = Math.abs(grp.userData.elevation - spawnElev) <= 13.0;
       }
     }
 
@@ -571,23 +566,10 @@ function computeFloorWallDeduplication(rooms = []) {
       if (Math.abs(playerY - lastCullElevation) < 1.0) return;
       lastCullElevation = playerY;
 
-      const isDollhouse = ctx?.game?.isDollhouse || ctx?.isDollhouse || false;
-
-      // 1. PointLight Culling: only active floor (+-1 level) lights are processed by GPU
+      // PointLight Culling: only active floor (+-1 level) lights are processed by GPU (2-3 lights instead of 60+)
       if (world.roomLights) {
         for (const l of world.roomLights) {
           l.visible = Math.abs(l.userData.elevation - playerY) <= 6.0;
-        }
-      }
-
-      // 2. Floor Mesh Culling: when inside, render only nearby floors (+-3 levels); in dollhouse, show whole skyscraper
-      if (world.floorGroups) {
-        for (const [lvl, grp] of world.floorGroups) {
-          if (isDollhouse) {
-            grp.visible = true;
-          } else {
-            grp.visible = Math.abs(grp.userData.elevation - playerY) <= 13.0;
-          }
         }
       }
     });

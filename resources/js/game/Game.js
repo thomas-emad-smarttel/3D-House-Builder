@@ -177,7 +177,10 @@ export class Game {
   onLockChange() {
     this.syncCaptureHint();
     const locked = document.pointerLockElement === this.canvas;
-    if (!locked && this.state === 'play' && !this.suppressPause && !this.busy) this.openPause();
+    const isElevatorModalOpen = !!document.querySelector('.elevator-modal-backdrop');
+    if (!locked && this.state === 'play' && !this.suppressPause && !this.busy && !isElevatorModalOpen) {
+      this.openPause();
+    }
   }
 
   toggleFullscreen() {
@@ -278,8 +281,93 @@ export class Game {
     const bar = document.getElementById('floor-selector-bar');
     if (!bar || !this.houseData?.floors) return;
 
-    const chips = [];
     const floors = this.houseData.floors || [];
+    const icons = { living: '🛋️', kitchen: '🍳', bedroom: '🛏️', bathroom: '🚿', balcony: '🌿' };
+
+    // For large multi-floor buildings & hotels (> 3 floors): use clean compact dropdowns
+    if (floors.length > 3) {
+      const selectStyle = `
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(212, 175, 55, 0.5);
+        color: #f8fafc;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        outline: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        cursor: pointer;
+        max-width: 260px;
+      `;
+
+      // 1. Floor Selector Dropdown
+      const floorSelect = document.createElement('select');
+      floorSelect.className = 'hud-select';
+      floorSelect.style.cssText = selectStyle;
+
+      const optAll = document.createElement('option');
+      optAll.value = 'all';
+      optAll.textContent = '🏢 All Floors (Overview)';
+      optAll.selected = this.activeFloorLevel === 'all';
+      floorSelect.appendChild(optAll);
+
+      floors.forEach((fl) => {
+        const opt = document.createElement('option');
+        opt.value = String(fl.level ?? 0);
+        opt.textContent = `L${fl.level ?? 0}: ${fl.name || `Floor ${fl.level}`}`;
+        opt.selected = String(this.activeFloorLevel) === String(fl.level);
+        floorSelect.appendChild(opt);
+      });
+
+      floorSelect.onchange = (e) => {
+        const val = e.target.value;
+        this.switchFloor(val === 'all' ? 'all' : Number(val));
+      };
+
+      // 2. Room Teleport Dropdown
+      const roomSelect = document.createElement('select');
+      roomSelect.className = 'hud-select';
+      roomSelect.style.cssText = selectStyle;
+
+      const optRoomDefault = document.createElement('option');
+      optRoomDefault.value = '';
+      optRoomDefault.textContent = '🚪 Jump to Room…';
+      roomSelect.appendChild(optRoomDefault);
+
+      // Only show rooms from the currently active floor (or all if in all floors)
+      const visibleFloors = this.activeFloorLevel === 'all'
+        ? floors
+        : floors.filter((f) => f.level === this.activeFloorLevel);
+
+      visibleFloors.forEach((fl) => {
+        const grp = document.createElement('optgroup');
+        grp.label = `Level ${fl.level ?? 0}: ${fl.name || `Floor ${fl.level}`}`;
+        const elev = fl.elevation !== undefined ? Number(fl.elevation) : (Number(fl.level || 0) * 3.4);
+
+        (fl.rooms || []).forEach((rm) => {
+          const opt = document.createElement('option');
+          opt.value = `${elev}|${rm.layout?.position?.x || 0}|${rm.layout?.position?.z || 0}|${rm.name}|${fl.level ?? 0}`;
+          opt.textContent = `${icons[rm.type] || '🏠'} ${rm.name}`;
+          grp.appendChild(opt);
+        });
+        if (grp.children.length > 0) roomSelect.appendChild(grp);
+      });
+
+      roomSelect.onchange = (e) => {
+        if (!e.target.value) return;
+        const [elev, rx, rz, rName, lvl] = e.target.value.split('|');
+        this.player.teleport(Number(rx), Number(rz), 0, 0, Number(elev));
+        const hudRoom = document.getElementById('hud-room');
+        if (hudRoom) hudRoom.textContent = `${this.houseData.title} · ${rName} (L${lvl})`;
+        roomSelect.value = ''; // reset to placeholder
+      };
+
+      bar.replaceChildren(floorSelect, roomSelect);
+      return;
+    }
+
+    const chips = [];
 
     // If multiple floors exist, show floor filter chips
     if (floors.length > 1) {
@@ -305,7 +393,6 @@ export class Game {
     }
 
     // Room teleport chips across floors
-    const icons = { living: '🛋️', kitchen: '🍳', bedroom: '🛏️', bathroom: '🚿', balcony: '🌿' };
     floors.forEach((fl) => {
       const elev = fl.elevation !== undefined ? Number(fl.elevation) : (Number(fl.level || 0) * 3.4);
       (fl.rooms || []).forEach((rm) => {

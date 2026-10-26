@@ -111,7 +111,7 @@
 <div id="hud" class="hud" hidden>
     <div class="hud-top-left">
         <p id="hud-room" class="hud-room">{{ $house->title }}</p>
-        <div id="floor-selector-bar" style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; max-width: min(80vw, 560px);"></div>
+        <div id="floor-selector-bar" style="display: flex; gap: 8px; margin-top: 6px; align-items: center; flex-wrap: wrap;"></div>
         <div class="hud-progress" aria-live="polite" style="display:none;">
             <div id="hud-progress-bar" class="progress-bar" aria-hidden="true"></div>
             <span id="hud-progress-text"></span>
