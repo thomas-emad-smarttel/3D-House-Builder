@@ -1433,13 +1433,13 @@ class HouseSeeder extends Seeder
         $floors = [];
 
         // -----------------------------------------------------------------
-        // LEVEL 0: Ground Floor — Grand Atrium Lobby & Fine Dining (Elevation 0.0, Height 4.2m)
+        // LEVEL 0: Ground Floor — Grand Atrium Lobby & Fine Dining (Elevation 0.0, Height 4.5m)
         // -----------------------------------------------------------------
         $floors[] = [
             'id' => 'hotel-floor-0',
             'name' => 'Ground Floor — Grand Atrium Lobby & Fine Dining',
             'level' => 0,
-            'height' => 4.2,
+            'height' => 4.5,
             'elevation' => 0.0,
             'rooms' => [
                 [
@@ -1448,8 +1448,8 @@ class HouseSeeder extends Seeder
                     'type' => 'living',
                     'color' => '#d4af37',
                     'layout' => [
-                        'size' => ['w' => 16.0, 'd' => 12.0, 'h' => 4.2],
-                        'position' => ['x' => 0, 'z' => -1.0],
+                        'size' => ['w' => 16.0, 'd' => 16.0, 'h' => 4.5],
+                        'position' => ['x' => 0.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'marble',
                             'floor_sound' => 'marble',
@@ -1458,36 +1458,37 @@ class HouseSeeder extends Seeder
                             'ceiling' => 'gypsum_led',
                             'ceiling_color' => '#ffffff',
                             'light' => 'warm',
-                            'brightness' => 1.4,
+                            'brightness' => 1.5,
                         ],
                         'doors' => [
-                            ['id' => 'hotel-door-entrance', 'wall' => 'south', 'type' => 'double_french', 'offset' => 0, 'width' => 2.4, 'height' => 2.8, 'material' => 'glass', 'label' => 'Grand Hotel Entrance'],
-                            ['id' => 'hotel-door-lobby-west', 'wall' => 'west', 'type' => 'arch', 'offset' => 0, 'width' => 2.2, 'height' => 2.8, 'material' => 'wood', 'label' => 'Arch to Crystal Palm Lounge'],
-                            ['id' => 'hotel-door-lobby-east', 'wall' => 'east', 'type' => 'arch', 'offset' => 0, 'width' => 2.2, 'height' => 2.8, 'material' => 'wood', 'label' => 'Arch to L\'Étoile Fine Dining'],
+                            ['id' => 'hotel-door-entrance', 'wall' => 'south', 'type' => 'double_french', 'offset' => 0, 'width' => 3.2, 'height' => 3.0, 'material' => 'glass', 'label' => 'Grand Hotel Entrance'],
+                            ['id' => 'hotel-door-lobby-west', 'wall' => 'west', 'type' => 'arch', 'offset' => 0, 'width' => 2.6, 'height' => 3.0, 'material' => 'wood', 'label' => 'Arch to Crystal Palm Lounge'],
+                            ['id' => 'hotel-door-lobby-east', 'wall' => 'east', 'type' => 'arch', 'offset' => 0, 'width' => 2.6, 'height' => 3.0, 'material' => 'wood', 'label' => 'Arch to L\'Étoile Fine Dining'],
+                            ['id' => 'hotel-door-lobby-garden', 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 3.2, 'height' => 3.0, 'material' => 'glass', 'label' => 'To Garden Pavilion'],
                         ],
                         'windows' => [
-                            ['id' => 'hotel-win-lobby-1', 'wall' => 'south', 'offset' => 5.2, 'width' => 3.2, 'height' => 2.6, 'sill_height' => 0.4],
-                            ['id' => 'hotel-win-lobby-2', 'wall' => 'south', 'offset' => -5.2, 'width' => 3.2, 'height' => 2.6, 'sill_height' => 0.4],
+                            ['id' => 'hotel-win-lobby-1', 'wall' => 'south', 'offset' => 5.5, 'width' => 3.6, 'height' => 2.8, 'sill_height' => 0.4],
+                            ['id' => 'hotel-win-lobby-2', 'wall' => 'south', 'offset' => -5.5, 'width' => 3.6, 'height' => 2.8, 'sill_height' => 0.4],
                         ],
                         'objects' => [
-                            ['id' => 'hotel-desk-reception', 'type' => 'block', 'x' => 0, 'z' => 2.2, 'rot' => 0, 'p' => ['w' => 4.2, 'd' => 1.0, 'h' => 1.1, 'color' => '#1e293b', 'material' => 'marble', 'collide' => true]],
-                            ['id' => 'hotel-lobby-sofa-1', 'type' => 'sofa', 'x' => -4.5, 'z' => -1.5, 'rot' => 90, 'p' => ['w' => 3.2, 'color' => '#1e293b']],
-                            ['id' => 'hotel-lobby-sofa-2', 'type' => 'sofa', 'x' => 4.5, 'z' => -1.5, 'rot' => 270, 'p' => ['w' => 3.2, 'color' => '#1e293b']],
-                            ['id' => 'hotel-lobby-table-1', 'type' => 'table', 'x' => -4.5, 'z' => 0.4, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 1.0, 'material' => 'marble']],
-                            ['id' => 'hotel-lobby-table-2', 'type' => 'table', 'x' => 4.5, 'z' => 0.4, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 1.0, 'material' => 'marble']],
-                            ['id' => 'hotel-palm-1', 'type' => 'plant', 'x' => -6.8, 'z' => -4.8, 'rot' => 0, 'p' => ['s' => 1.5]],
-                            ['id' => 'hotel-palm-2', 'type' => 'plant', 'x' => 6.8, 'z' => -4.8, 'rot' => 0, 'p' => ['s' => 1.5]],
+                            ['id' => 'hotel-desk-reception', 'type' => 'block', 'x' => 0.0, 'z' => 3.2, 'rot' => 0, 'p' => ['w' => 5.2, 'd' => 1.2, 'h' => 1.15, 'color' => '#1e293b', 'material' => 'marble', 'collide' => true]],
+                            ['id' => 'hotel-lobby-sofa-1', 'type' => 'sofa', 'x' => 4.5, 'z' => -3.5, 'rot' => 270, 'p' => ['w' => 3.2, 'color' => '#1e293b']],
+                            ['id' => 'hotel-lobby-table-1', 'type' => 'table', 'x' => 4.5, 'z' => -1.5, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 1.0, 'material' => 'marble']],
+                            ['id' => 'hotel-palm-1', 'type' => 'plant', 'x' => -6.5, 'z' => -6.5, 'rot' => 0, 'p' => ['s' => 1.6]],
+                            ['id' => 'hotel-palm-2', 'type' => 'plant', 'x' => 6.5, 'z' => -6.5, 'rot' => 0, 'p' => ['s' => 1.6]],
+                            ['id' => 'hotel-palm-3', 'type' => 'plant', 'x' => 6.5, 'z' => 6.5, 'rot' => 0, 'p' => ['s' => 1.6]],
+                            ['id' => 'hotel-palm-4', 'type' => 'plant', 'x' => -6.5, 'z' => 6.5, 'rot' => 0, 'p' => ['s' => 1.6]],
                         ],
                     ],
                 ],
                 [
                     'id' => 'hotel-room-lounge',
-                    'name' => 'The Crystal Palm Lounge & Cafe',
+                    'name' => 'The Crystal Palm Lounge & Piano Bar',
                     'type' => 'living',
                     'color' => '#a855f7',
                     'layout' => [
-                        'size' => ['w' => 12.0, 'd' => 11.0, 'h' => 4.2],
-                        'position' => ['x' => -14.0, 'z' => -1.0],
+                        'size' => ['w' => 14.0, 'd' => 16.0, 'h' => 4.5],
+                        'position' => ['x' => -15.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'parquet',
                             'floor_sound' => 'wood',
@@ -1496,29 +1497,29 @@ class HouseSeeder extends Seeder
                             'ceiling' => 'coffered',
                             'ceiling_color' => '#ffffff',
                             'light' => 'warm',
-                            'brightness' => 1.3,
+                            'brightness' => 1.4,
                         ],
                         'doors' => [],
                         'windows' => [
-                            ['id' => 'hotel-win-lounge-w1', 'wall' => 'west', 'offset' => 2.5, 'width' => 2.8, 'height' => 2.4, 'sill_height' => 0.5],
-                            ['id' => 'hotel-win-lounge-w2', 'wall' => 'west', 'offset' => -2.5, 'width' => 2.8, 'height' => 2.4, 'sill_height' => 0.5],
+                            ['id' => 'hotel-win-lounge-w1', 'wall' => 'west', 'offset' => 3.5, 'width' => 3.6, 'height' => 2.8, 'sill_height' => 0.5],
+                            ['id' => 'hotel-win-lounge-w2', 'wall' => 'west', 'offset' => -3.5, 'width' => 3.6, 'height' => 2.8, 'sill_height' => 0.5],
                         ],
                         'objects' => [
-                            ['id' => 'hotel-lounge-sofa-1', 'type' => 'sofa', 'x' => -2.0, 'z' => -2.0, 'rot' => 0, 'p' => ['w' => 3.0, 'color' => '#334155']],
-                            ['id' => 'hotel-lounge-table-1', 'type' => 'table', 'x' => -2.0, 'z' => -0.5, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 0.9, 'material' => 'marble']],
-                            ['id' => 'hotel-lounge-bar', 'type' => 'block', 'x' => 3.5, 'z' => 2.0, 'rot' => 0, 'p' => ['w' => 3.2, 'd' => 0.9, 'h' => 1.1, 'color' => '#0f172a', 'material' => 'wood', 'collide' => true]],
-                            ['id' => 'hotel-lounge-plant-1', 'type' => 'plant', 'x' => -4.8, 'z' => -4.2, 'rot' => 0, 'p' => ['s' => 1.3]],
+                            ['id' => 'hotel-lounge-sofa-1', 'type' => 'sofa', 'x' => -2.5, 'z' => -2.5, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#334155']],
+                            ['id' => 'hotel-lounge-table-1', 'type' => 'table', 'x' => -2.5, 'z' => -0.5, 'rot' => 0, 'p' => ['w' => 1.8, 'd' => 1.0, 'material' => 'marble']],
+                            ['id' => 'hotel-lounge-bar', 'type' => 'block', 'x' => 3.5, 'z' => 3.0, 'rot' => 0, 'p' => ['w' => 3.8, 'd' => 1.0, 'h' => 1.15, 'color' => '#0f172a', 'material' => 'wood', 'collide' => true]],
+                            ['id' => 'hotel-lounge-plant-1', 'type' => 'plant', 'x' => -5.5, 'z' => -6.0, 'rot' => 0, 'p' => ['s' => 1.4]],
                         ],
                     ],
                 ],
                 [
                     'id' => 'hotel-room-dining',
-                    'name' => 'L\'Étoile Fine Dining Restaurant',
+                    'name' => 'L\'Étoile Fine Dining & Wine Vault',
                     'type' => 'kitchen',
                     'color' => '#f59e0b',
                     'layout' => [
-                        'size' => ['w' => 12.0, 'd' => 11.0, 'h' => 4.2],
-                        'position' => ['x' => 14.0, 'z' => -1.0],
+                        'size' => ['w' => 14.0, 'd' => 16.0, 'h' => 4.5],
+                        'position' => ['x' => 15.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'marble',
                             'floor_sound' => 'marble',
@@ -1527,18 +1528,45 @@ class HouseSeeder extends Seeder
                             'ceiling' => 'gypsum_led',
                             'ceiling_color' => '#ffffff',
                             'light' => 'warm',
-                            'brightness' => 1.3,
+                            'brightness' => 1.4,
                         ],
                         'doors' => [],
                         'windows' => [
-                            ['id' => 'hotel-win-dining-e1', 'wall' => 'east', 'offset' => 2.5, 'width' => 2.8, 'height' => 2.4, 'sill_height' => 0.5],
-                            ['id' => 'hotel-win-dining-e2', 'wall' => 'east', 'offset' => -2.5, 'width' => 2.8, 'height' => 2.4, 'sill_height' => 0.5],
+                            ['id' => 'hotel-win-dining-e1', 'wall' => 'east', 'offset' => 3.5, 'width' => 3.6, 'height' => 2.8, 'sill_height' => 0.5],
+                            ['id' => 'hotel-win-dining-e2', 'wall' => 'east', 'offset' => -3.5, 'width' => 3.6, 'height' => 2.8, 'sill_height' => 0.5],
                         ],
                         'objects' => [
-                            ['id' => 'hotel-dining-tbl-1', 'type' => 'table', 'x' => -2.0, 'z' => -1.5, 'rot' => 0, 'p' => ['w' => 2.2, 'd' => 1.1, 'material' => 'marble']],
-                            ['id' => 'hotel-dining-tbl-2', 'type' => 'table', 'x' => 2.0, 'z' => -1.5, 'rot' => 0, 'p' => ['w' => 2.2, 'd' => 1.1, 'material' => 'marble']],
-                            ['id' => 'hotel-dining-chair-1', 'type' => 'chair', 'x' => -3.4, 'z' => -1.5, 'rot' => 90, 'p' => ['color' => '#991b1b']],
-                            ['id' => 'hotel-dining-chair-2', 'type' => 'chair', 'x' => -0.6, 'z' => -1.5, 'rot' => 270, 'p' => ['color' => '#991b1b']],
+                            ['id' => 'hotel-dining-tbl-1', 'type' => 'table', 'x' => -2.5, 'z' => -2.0, 'rot' => 0, 'p' => ['w' => 2.6, 'd' => 1.2, 'material' => 'marble']],
+                            ['id' => 'hotel-dining-tbl-2', 'type' => 'table', 'x' => 2.5, 'z' => -2.0, 'rot' => 0, 'p' => ['w' => 2.6, 'd' => 1.2, 'material' => 'marble']],
+                            ['id' => 'hotel-dining-chair-1', 'type' => 'chair', 'x' => -4.2, 'z' => -2.0, 'rot' => 90, 'p' => ['color' => '#991b1b']],
+                            ['id' => 'hotel-dining-chair-2', 'type' => 'chair', 'x' => -0.8, 'z' => -2.0, 'rot' => 270, 'p' => ['color' => '#991b1b']],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'hotel-room-garden',
+                    'name' => 'The Grand Garden Court & Fountain Terrace',
+                    'type' => 'balcony',
+                    'color' => '#10b981',
+                    'layout' => [
+                        'size' => ['w' => 26.0, 'd' => 8.0, 'h' => 3.8],
+                        'position' => ['x' => 0.0, 'z' => -12.0],
+                        'theme' => [
+                            'floor' => 'tile',
+                            'floor_sound' => 'marble',
+                            'wall' => 'plaster',
+                            'wall_color' => '#cbd5e1',
+                            'ceiling' => 'open_sky',
+                            'ceiling_color' => '#ffffff',
+                            'light' => 'warm',
+                            'brightness' => 1.5,
+                        ],
+                        'doors' => [],
+                        'windows' => [],
+                        'objects' => [
+                            ['id' => 'hotel-garden-bench-1', 'type' => 'sofa', 'x' => -6.0, 'z' => 0.0, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#475569']],
+                            ['id' => 'hotel-garden-bench-2', 'type' => 'sofa', 'x' => 6.0, 'z' => 0.0, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#475569']],
+                            ['id' => 'hotel-garden-tbl', 'type' => 'table', 'x' => 0.0, 'z' => 1.5, 'rot' => 0, 'p' => ['w' => 2.0, 'd' => 1.0, 'material' => 'marble']],
                         ],
                     ],
                 ],
@@ -1546,14 +1574,14 @@ class HouseSeeder extends Seeder
         ];
 
         // -----------------------------------------------------------------
-        // LEVEL 1: First Floor — Imperial Ballroom & Business Center (Elevation 4.2m, Height 3.8m)
+        // LEVEL 1: First Floor — Imperial Ballroom & Conference Summit (Elevation 4.5m, Height 4.2m)
         // -----------------------------------------------------------------
         $floors[] = [
             'id' => 'hotel-floor-1',
             'name' => 'First Floor — Imperial Ballroom & Conference Summit',
             'level' => 1,
-            'height' => 3.8,
-            'elevation' => 4.2,
+            'height' => 4.2,
+            'elevation' => 4.5,
             'rooms' => [
                 [
                     'id' => 'hotel-room-ballroom',
@@ -1561,8 +1589,8 @@ class HouseSeeder extends Seeder
                     'type' => 'living',
                     'color' => '#e11d48',
                     'layout' => [
-                        'size' => ['w' => 18.0, 'd' => 12.0, 'h' => 3.8],
-                        'position' => ['x' => 0, 'z' => -1.5],
+                        'size' => ['w' => 16.0, 'd' => 16.0, 'h' => 4.2],
+                        'position' => ['x' => 0.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'hardwood',
                             'floor_sound' => 'wood',
@@ -1574,28 +1602,29 @@ class HouseSeeder extends Seeder
                             'brightness' => 1.5,
                         ],
                         'doors' => [
-                            ['id' => 'hotel-door-ballroom-w', 'wall' => 'west', 'type' => 'arch', 'offset' => 0, 'width' => 2.0, 'height' => 2.6, 'material' => 'wood', 'label' => 'To Boardroom'],
-                            ['id' => 'hotel-door-ballroom-e', 'wall' => 'east', 'type' => 'arch', 'offset' => 0, 'width' => 2.0, 'height' => 2.6, 'material' => 'wood', 'label' => 'To Pre-Function Lounge'],
+                            ['id' => 'hotel-door-ballroom-w', 'wall' => 'west', 'type' => 'arch', 'offset' => 0, 'width' => 2.6, 'height' => 2.8, 'material' => 'wood', 'label' => 'To Executive Boardroom'],
+                            ['id' => 'hotel-door-ballroom-e', 'wall' => 'east', 'type' => 'arch', 'offset' => 0, 'width' => 2.6, 'height' => 2.8, 'material' => 'wood', 'label' => 'To Pre-Function Lounge'],
+                            ['id' => 'hotel-door-ballroom-deck', 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 3.2, 'height' => 2.8, 'material' => 'glass', 'label' => 'To Summit Terrace'],
                         ],
                         'windows' => [
-                            ['id' => 'hotel-win-ball-s1', 'wall' => 'south', 'offset' => 5.0, 'width' => 3.0, 'height' => 2.2, 'sill_height' => 0.6],
-                            ['id' => 'hotel-win-ball-s2', 'wall' => 'south', 'offset' => -5.0, 'width' => 3.0, 'height' => 2.2, 'sill_height' => 0.6],
+                            ['id' => 'hotel-win-ball-s1', 'wall' => 'south', 'offset' => 5.5, 'width' => 3.6, 'height' => 2.6, 'sill_height' => 0.5],
+                            ['id' => 'hotel-win-ball-s2', 'wall' => 'south', 'offset' => -5.5, 'width' => 3.6, 'height' => 2.6, 'sill_height' => 0.5],
                         ],
                         'objects' => [
-                            ['id' => 'hotel-ball-table', 'type' => 'table', 'x' => 0, 'z' => 0, 'rot' => 0, 'p' => ['w' => 3.6, 'd' => 1.4, 'material' => 'marble']],
-                            ['id' => 'hotel-ball-sofa-1', 'type' => 'sofa', 'x' => -5.0, 'z' => -4.5, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#9f1239']],
-                            ['id' => 'hotel-ball-sofa-2', 'type' => 'sofa', 'x' => 5.0, 'z' => -4.5, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#9f1239']],
+                            ['id' => 'hotel-ball-table', 'type' => 'table', 'x' => 0.0, 'z' => 0.0, 'rot' => 0, 'p' => ['w' => 4.2, 'd' => 1.6, 'material' => 'marble']],
+                            ['id' => 'hotel-ball-sofa-1', 'type' => 'sofa', 'x' => 4.5, 'z' => -4.5, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#9f1239']],
+                            ['id' => 'hotel-ball-sofa-2', 'type' => 'sofa', 'x' => -3.5, 'z' => -5.5, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#9f1239']],
                         ],
                     ],
                 ],
                 [
                     'id' => 'hotel-room-boardroom',
-                    'name' => 'Executive Summit Boardroom & Business Center',
+                    'name' => 'Executive Summit Boardroom & Media Center',
                     'type' => 'living',
                     'color' => '#2563eb',
                     'layout' => [
-                        'size' => ['w' => 11.0, 'd' => 9.0, 'h' => 3.8],
-                        'position' => ['x' => -14.5, 'z' => -1.5],
+                        'size' => ['w' => 14.0, 'd' => 16.0, 'h' => 4.2],
+                        'position' => ['x' => -15.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'parquet',
                             'floor_sound' => 'wood',
@@ -1604,16 +1633,16 @@ class HouseSeeder extends Seeder
                             'ceiling' => 'gypsum_led',
                             'ceiling_color' => '#ffffff',
                             'light' => 'warm',
-                            'brightness' => 1.2,
+                            'brightness' => 1.3,
                         ],
                         'doors' => [],
                         'windows' => [
-                            ['id' => 'hotel-win-board-w', 'wall' => 'west', 'offset' => 0, 'width' => 3.2, 'height' => 2.2, 'sill_height' => 0.6],
+                            ['id' => 'hotel-win-board-w', 'wall' => 'west', 'offset' => 0, 'width' => 3.8, 'height' => 2.6, 'sill_height' => 0.5],
                         ],
                         'objects' => [
-                            ['id' => 'hotel-conf-tbl', 'type' => 'table', 'x' => 0, 'z' => 0, 'rot' => 0, 'p' => ['w' => 4.0, 'd' => 1.6, 'material' => 'wood']],
-                            ['id' => 'hotel-conf-chair-1', 'type' => 'chair', 'x' => -2.4, 'z' => 0, 'rot' => 90, 'p' => ['color' => '#1e293b']],
-                            ['id' => 'hotel-conf-chair-2', 'type' => 'chair', 'x' => 2.4, 'z' => 0, 'rot' => 270, 'p' => ['color' => '#1e293b']],
+                            ['id' => 'hotel-conf-tbl', 'type' => 'table', 'x' => 0.0, 'z' => 0.0, 'rot' => 0, 'p' => ['w' => 5.2, 'd' => 1.8, 'material' => 'wood']],
+                            ['id' => 'hotel-conf-chair-1', 'type' => 'chair', 'x' => -3.2, 'z' => 0.0, 'rot' => 90, 'p' => ['color' => '#1e293b']],
+                            ['id' => 'hotel-conf-chair-2', 'type' => 'chair', 'x' => 3.2, 'z' => 0.0, 'rot' => 270, 'p' => ['color' => '#1e293b']],
                         ],
                     ],
                 ],
@@ -1623,8 +1652,8 @@ class HouseSeeder extends Seeder
                     'type' => 'living',
                     'color' => '#7c3aed',
                     'layout' => [
-                        'size' => ['w' => 11.0, 'd' => 9.0, 'h' => 3.8],
-                        'position' => ['x' => 14.5, 'z' => -1.5],
+                        'size' => ['w' => 14.0, 'd' => 16.0, 'h' => 4.2],
+                        'position' => ['x' => 15.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'marble',
                             'floor_sound' => 'marble',
@@ -1633,15 +1662,41 @@ class HouseSeeder extends Seeder
                             'ceiling' => 'gypsum_led',
                             'ceiling_color' => '#ffffff',
                             'light' => 'warm',
-                            'brightness' => 1.3,
+                            'brightness' => 1.4,
                         ],
                         'doors' => [],
                         'windows' => [
-                            ['id' => 'hotel-win-pref-e', 'wall' => 'east', 'offset' => 0, 'width' => 3.2, 'height' => 2.2, 'sill_height' => 0.6],
+                            ['id' => 'hotel-win-pref-e', 'wall' => 'east', 'offset' => 0, 'width' => 3.8, 'height' => 2.6, 'sill_height' => 0.5],
                         ],
                         'objects' => [
-                            ['id' => 'hotel-pref-sofa', 'type' => 'sofa', 'x' => 0, 'z' => -2.0, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#4c1d95']],
-                            ['id' => 'hotel-pref-table', 'type' => 'table', 'x' => 0, 'z' => -0.5, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 0.9, 'material' => 'marble']],
+                            ['id' => 'hotel-pref-sofa', 'type' => 'sofa', 'x' => 0.0, 'z' => -3.0, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#4c1d95']],
+                            ['id' => 'hotel-pref-table', 'type' => 'table', 'x' => 0.0, 'z' => -0.8, 'rot' => 0, 'p' => ['w' => 2.0, 'd' => 1.0, 'material' => 'marble']],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'hotel-room-summit-terrace',
+                    'name' => 'Imperial Summit Panoramic Terrace',
+                    'type' => 'balcony',
+                    'color' => '#059669',
+                    'layout' => [
+                        'size' => ['w' => 26.0, 'd' => 8.0, 'h' => 3.8],
+                        'position' => ['x' => 0.0, 'z' => -12.0],
+                        'theme' => [
+                            'floor' => 'tile',
+                            'floor_sound' => 'marble',
+                            'wall' => 'plaster',
+                            'wall_color' => '#cbd5e1',
+                            'ceiling' => 'open_sky',
+                            'ceiling_color' => '#ffffff',
+                            'light' => 'warm',
+                            'brightness' => 1.5,
+                        ],
+                        'doors' => [],
+                        'windows' => [],
+                        'objects' => [
+                            ['id' => 'hotel-summit-sofa', 'type' => 'sofa', 'x' => 0.0, 'z' => 0.5, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#334155']],
+                            ['id' => 'hotel-summit-tbl', 'type' => 'table', 'x' => 0.0, 'z' => 2.2, 'rot' => 0, 'p' => ['w' => 1.8, 'd' => 1.0, 'material' => 'wood']],
                         ],
                     ],
                 ],
@@ -1649,14 +1704,14 @@ class HouseSeeder extends Seeder
         ];
 
         // -----------------------------------------------------------------
-        // LEVEL 2: Second Floor — Azure Pool, Thermal Spa & Fitness (Elevation 8.0m, Height 3.8m)
+        // LEVEL 2: Second Floor — Azure Pool, Thermal Spa & Fitness (Elevation 8.7m, Height 4.0m)
         // -----------------------------------------------------------------
         $floors[] = [
             'id' => 'hotel-floor-2',
             'name' => 'Second Floor — Azure Horizon Pool, Spa & Fitness',
             'level' => 2,
-            'height' => 3.8,
-            'elevation' => 8.0,
+            'height' => 4.0,
+            'elevation' => 8.7,
             'rooms' => [
                 [
                     'id' => 'hotel-room-pool',
@@ -1664,8 +1719,8 @@ class HouseSeeder extends Seeder
                     'type' => 'balcony',
                     'color' => '#06b6d4',
                     'layout' => [
-                        'size' => ['w' => 16.0, 'd' => 12.0, 'h' => 3.8],
-                        'position' => ['x' => 0, 'z' => -1.5],
+                        'size' => ['w' => 16.0, 'd' => 16.0, 'h' => 4.0],
+                        'position' => ['x' => 0.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'tile',
                             'floor_sound' => 'marble',
@@ -1677,26 +1732,27 @@ class HouseSeeder extends Seeder
                             'brightness' => 1.5,
                         ],
                         'doors' => [
-                            ['id' => 'hotel-door-pool-spa', 'wall' => 'west', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.0, 'height' => 2.4, 'material' => 'glass', 'label' => 'To Thermal Spa'],
-                            ['id' => 'hotel-door-pool-gym', 'wall' => 'east', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.0, 'height' => 2.4, 'material' => 'glass', 'label' => 'To Fitness Studio'],
+                            ['id' => 'hotel-door-pool-spa', 'wall' => 'west', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.6, 'height' => 2.6, 'material' => 'glass', 'label' => 'To Thermal Spa'],
+                            ['id' => 'hotel-door-pool-gym', 'wall' => 'east', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.6, 'height' => 2.6, 'material' => 'glass', 'label' => 'To Fitness Studio'],
+                            ['id' => 'hotel-door-pool-deck', 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 3.2, 'height' => 2.6, 'material' => 'glass', 'label' => 'To Sun Deck'],
                         ],
                         'windows' => [],
                         'objects' => [
-                            ['id' => 'hotel-pool-sofa-1', 'type' => 'sofa', 'x' => -5.0, 'z' => 2.0, 'rot' => 0, 'p' => ['w' => 2.4, 'color' => '#0e7490']],
-                            ['id' => 'hotel-pool-sofa-2', 'type' => 'sofa', 'x' => 5.0, 'z' => 2.0, 'rot' => 0, 'p' => ['w' => 2.4, 'color' => '#0e7490']],
-                            ['id' => 'hotel-pool-plant-1', 'type' => 'plant', 'x' => -6.5, 'z' => -4.5, 'rot' => 0, 'p' => ['s' => 1.4]],
-                            ['id' => 'hotel-pool-plant-2', 'type' => 'plant', 'x' => 6.5, 'z' => -4.5, 'rot' => 0, 'p' => ['s' => 1.4]],
+                            ['id' => 'hotel-pool-sofa-1', 'type' => 'sofa', 'x' => -5.0, 'z' => 4.5, 'rot' => 0, 'p' => ['w' => 3.0, 'color' => '#0e7490']],
+                            ['id' => 'hotel-pool-sofa-2', 'type' => 'sofa', 'x' => 5.0, 'z' => 4.5, 'rot' => 0, 'p' => ['w' => 3.0, 'color' => '#0e7490']],
+                            ['id' => 'hotel-pool-plant-1', 'type' => 'plant', 'x' => -6.5, 'z' => -6.5, 'rot' => 0, 'p' => ['s' => 1.5]],
+                            ['id' => 'hotel-pool-plant-2', 'type' => 'plant', 'x' => 6.5, 'z' => -6.5, 'rot' => 0, 'p' => ['s' => 1.5]],
                         ],
                     ],
                 ],
                 [
                     'id' => 'hotel-room-spa',
-                    'name' => 'Lotus Wellness & Thermal Spa',
+                    'name' => 'Lotus Wellness, Thermal Spa & Sauna',
                     'type' => 'living',
                     'color' => '#14b8a6',
                     'layout' => [
-                        'size' => ['w' => 11.0, 'd' => 9.0, 'h' => 3.8],
-                        'position' => ['x' => -13.5, 'z' => -1.5],
+                        'size' => ['w' => 14.0, 'd' => 16.0, 'h' => 4.0],
+                        'position' => ['x' => -15.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'parquet',
                             'floor_sound' => 'wood',
@@ -1709,22 +1765,22 @@ class HouseSeeder extends Seeder
                         ],
                         'doors' => [],
                         'windows' => [
-                            ['id' => 'hotel-win-spa-w', 'wall' => 'west', 'offset' => 0, 'width' => 2.8, 'height' => 2.0, 'sill_height' => 0.6],
+                            ['id' => 'hotel-win-spa-w', 'wall' => 'west', 'offset' => 0, 'width' => 3.6, 'height' => 2.4, 'sill_height' => 0.6],
                         ],
                         'objects' => [
-                            ['id' => 'hotel-spa-sofa', 'type' => 'sofa', 'x' => 0, 'z' => -1.5, 'rot' => 0, 'p' => ['w' => 2.8, 'color' => '#115e59']],
-                            ['id' => 'hotel-spa-table', 'type' => 'table', 'x' => 0, 'z' => 0.5, 'rot' => 0, 'p' => ['w' => 1.4, 'd' => 0.8, 'material' => 'wood']],
+                            ['id' => 'hotel-spa-sofa', 'type' => 'sofa', 'x' => 0.0, 'z' => -2.5, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#115e59']],
+                            ['id' => 'hotel-spa-table', 'type' => 'table', 'x' => 0.0, 'z' => 0.5, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 0.9, 'material' => 'wood']],
                         ],
                     ],
                 ],
                 [
                     'id' => 'hotel-room-gym',
-                    'name' => 'Skyline Fitness & Private Studio',
+                    'name' => 'Skyline Athletic & Private Fitness Studio',
                     'type' => 'living',
                     'color' => '#f97316',
                     'layout' => [
-                        'size' => ['w' => 11.0, 'd' => 9.0, 'h' => 3.8],
-                        'position' => ['x' => 13.5, 'z' => -1.5],
+                        'size' => ['w' => 14.0, 'd' => 16.0, 'h' => 4.0],
+                        'position' => ['x' => 15.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'hardwood',
                             'floor_sound' => 'wood',
@@ -1733,15 +1789,41 @@ class HouseSeeder extends Seeder
                             'ceiling' => 'gypsum_led',
                             'ceiling_color' => '#ffffff',
                             'light' => 'warm',
-                            'brightness' => 1.3,
+                            'brightness' => 1.4,
                         ],
                         'doors' => [],
                         'windows' => [
-                            ['id' => 'hotel-win-gym-e', 'wall' => 'east', 'offset' => 0, 'width' => 2.8, 'height' => 2.0, 'sill_height' => 0.6],
+                            ['id' => 'hotel-win-gym-e', 'wall' => 'east', 'offset' => 0, 'width' => 3.6, 'height' => 2.4, 'sill_height' => 0.6],
                         ],
                         'objects' => [
-                            ['id' => 'hotel-gym-bench', 'type' => 'block', 'x' => 0, 'z' => 0, 'rot' => 0, 'p' => ['w' => 2.2, 'd' => 0.8, 'h' => 0.6, 'color' => '#1e293b', 'material' => 'wood', 'collide' => true]],
-                            ['id' => 'hotel-gym-rack', 'type' => 'block', 'x' => 3.5, 'z' => 2.0, 'rot' => 0, 'p' => ['w' => 1.8, 'd' => 0.8, 'h' => 1.2, 'color' => '#334155', 'material' => 'wood', 'collide' => true]],
+                            ['id' => 'hotel-gym-bench', 'type' => 'block', 'x' => 0.0, 'z' => 0.0, 'rot' => 0, 'p' => ['w' => 2.6, 'd' => 1.0, 'h' => 0.65, 'color' => '#1e293b', 'material' => 'wood', 'collide' => true]],
+                            ['id' => 'hotel-gym-rack', 'type' => 'block', 'x' => 4.5, 'z' => 3.0, 'rot' => 0, 'p' => ['w' => 2.2, 'd' => 1.0, 'h' => 1.4, 'color' => '#334155', 'material' => 'wood', 'collide' => true]],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'hotel-room-pool-deck',
+                    'name' => 'Azure Poolside Sun Deck & Solarium',
+                    'type' => 'balcony',
+                    'color' => '#0284c7',
+                    'layout' => [
+                        'size' => ['w' => 26.0, 'd' => 8.0, 'h' => 3.8],
+                        'position' => ['x' => 0.0, 'z' => -12.0],
+                        'theme' => [
+                            'floor' => 'tile',
+                            'floor_sound' => 'marble',
+                            'wall' => 'plaster',
+                            'wall_color' => '#cbd5e1',
+                            'ceiling' => 'open_sky',
+                            'ceiling_color' => '#ffffff',
+                            'light' => 'warm',
+                            'brightness' => 1.5,
+                        ],
+                        'doors' => [],
+                        'windows' => [],
+                        'objects' => [
+                            ['id' => 'hotel-deck-sofa', 'type' => 'sofa', 'x' => 0.0, 'z' => 0.5, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#0369a1']],
+                            ['id' => 'hotel-deck-tbl', 'type' => 'table', 'x' => 0.0, 'z' => 2.2, 'rot' => 0, 'p' => ['w' => 1.8, 'd' => 1.0, 'material' => 'wood']],
                         ],
                     ],
                 ],
@@ -1749,7 +1831,7 @@ class HouseSeeder extends Seeder
         ];
 
         // -----------------------------------------------------------------
-        // LEVELS 3 to 18: 16 Luxury Hotel Suite Floors (3 Suites per Floor = 48 Suites)
+        // LEVELS 3 to 18: 16 Luxury Hotel Suite Floors (3 Expansive Suites + Grand Central Hallway)
         // -----------------------------------------------------------------
         $suiteThemeTitles = [
             3 => 'Executive Suite Collection',
@@ -1771,61 +1853,25 @@ class HouseSeeder extends Seeder
         ];
 
         for ($lvl = 3; $lvl <= 18; $lvl++) {
-            $elevation = round(8.0 + ($lvl - 2) * 3.4, 2);
+            $elevation = round(8.7 + ($lvl - 2) * 3.6, 2);
             $themeTitle = $suiteThemeTitles[$lvl] ?? 'Luxury Suites';
 
             $floors[] = [
                 'id' => "hotel-floor-{$lvl}",
                 'name' => "Floor {$lvl} — {$themeTitle} ({$lvl}01, {$lvl}02, {$lvl}03)",
                 'level' => $lvl,
-                'height' => 3.4,
+                'height' => 3.6,
                 'elevation' => $elevation,
                 'rooms' => [
-                    // Suite A: Master Bedroom
+                    // Room 1: Grand Central Elevator Hallway & Lobby
                     [
-                        'id' => "hotel-room-suite-{$lvl}01",
-                        'name' => "Suite {$lvl}01 — King Master Bedroom Suite",
-                        'type' => 'bedroom',
-                        'color' => '#6366f1',
-                        'layout' => [
-                            'size' => ['w' => 11.0, 'd' => 9.0, 'h' => 3.4],
-                            'position' => ['x' => -9.0, 'z' => -2.0],
-                            'theme' => [
-                                'floor' => 'parquet',
-                                'floor_sound' => 'wood',
-                                'wall' => 'plaster',
-                                'wall_color' => '#f1f5f9',
-                                'ceiling' => 'coffered',
-                                'ceiling_color' => '#ffffff',
-                                'light' => 'warm',
-                                'brightness' => 1.2,
-                            ],
-                            'doors' => [
-                                ['id' => "door-suite-{$lvl}01-corr", 'wall' => 'east', 'type' => 'standard', 'offset' => 0, 'width' => 1.2, 'height' => 2.4, 'material' => 'wood', 'label' => "Suite {$lvl}01 Entrance"],
-                                ['id' => "door-suite-{$lvl}01-terrace", 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.4, 'height' => 2.4, 'material' => 'glass', 'label' => 'Terrace Glass Door'],
-                            ],
-                            'windows' => [
-                                ['id' => "win-suite-{$lvl}01-s", 'wall' => 'south', 'offset' => 0, 'width' => 3.2, 'height' => 2.0, 'sill_height' => 0.5],
-                                ['id' => "win-suite-{$lvl}01-w", 'wall' => 'west', 'offset' => 0, 'width' => 2.8, 'height' => 2.0, 'sill_height' => 0.5],
-                            ],
-                            'objects' => [
-                                ['id' => "bed-{$lvl}01", 'type' => 'sofa', 'x' => -1.8, 'z' => -2.2, 'rot' => 0, 'p' => ['w' => 2.8, 'color' => '#1e293b']],
-                                ['id' => "sofa-{$lvl}01", 'type' => 'sofa', 'x' => 2.2, 'z' => 1.2, 'rot' => 270, 'p' => ['w' => 2.0, 'color' => '#334155']],
-                                ['id' => "table-{$lvl}01", 'type' => 'table', 'x' => 0.5, 'z' => 1.2, 'rot' => 0, 'p' => ['w' => 1.2, 'd' => 0.8, 'material' => 'marble']],
-                                ['id' => "plant-{$lvl}01", 'type' => 'plant', 'x' => -4.2, 'z' => 3.0, 'rot' => 0, 'p' => ['s' => 1.2]],
-                            ],
-                        ],
-                    ],
-
-                    // Suite B: Living & Dining Salon
-                    [
-                        'id' => "hotel-room-suite-{$lvl}02",
-                        'name' => "Suite {$lvl}02 — Executive Living & Dining Salon",
+                        'id' => "hotel-room-hallway-{$lvl}",
+                        'name' => "Level {$lvl} — Grand Elevator Hallway & Lobby",
                         'type' => 'living',
-                        'color' => '#3b82f6',
+                        'color' => '#d4af37',
                         'layout' => [
-                            'size' => ['w' => 11.0, 'd' => 9.0, 'h' => 3.4],
-                            'position' => ['x' => 9.0, 'z' => -2.0],
+                            'size' => ['w' => 8.0, 'd' => 14.0, 'h' => 3.6],
+                            'position' => ['x' => 0.0, 'z' => 0.0],
                             'theme' => [
                                 'floor' => 'marble',
                                 'floor_sound' => 'marble',
@@ -1834,34 +1880,106 @@ class HouseSeeder extends Seeder
                                 'ceiling' => 'gypsum_led',
                                 'ceiling_color' => '#ffffff',
                                 'light' => 'warm',
-                                'brightness' => 1.2,
+                                'brightness' => 1.4,
                             ],
                             'doors' => [
-                                ['id' => "door-suite-{$lvl}02-corr", 'wall' => 'west', 'type' => 'standard', 'offset' => 0, 'width' => 1.2, 'height' => 2.4, 'material' => 'wood', 'label' => "Suite {$lvl}02 Entrance"],
-                                ['id' => "door-suite-{$lvl}02-terrace", 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.4, 'height' => 2.4, 'material' => 'glass', 'label' => 'Terrace Glass Door'],
+                                ['id' => "door-fl{$lvl}-suite01", 'wall' => 'west', 'type' => 'standard', 'offset' => 1.5, 'width' => 1.4, 'height' => 2.6, 'material' => 'wood', 'label' => "Suite {$lvl}01 Entrance"],
+                                ['id' => "door-fl{$lvl}-suite02", 'wall' => 'east', 'type' => 'standard', 'offset' => 1.5, 'width' => 1.4, 'height' => 2.6, 'material' => 'wood', 'label' => "Suite {$lvl}02 Entrance"],
+                                ['id' => "door-fl{$lvl}-terrace", 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.4, 'height' => 2.6, 'material' => 'glass', 'label' => 'Skyline Terrace Access'],
                             ],
                             'windows' => [
-                                ['id' => "win-suite-{$lvl}02-s", 'wall' => 'south', 'offset' => 0, 'width' => 3.2, 'height' => 2.0, 'sill_height' => 0.5],
-                                ['id' => "win-suite-{$lvl}02-e", 'wall' => 'east', 'offset' => 0, 'width' => 2.8, 'height' => 2.0, 'sill_height' => 0.5],
+                                ['id' => "win-fl{$lvl}-city", 'wall' => 'south', 'offset' => 0, 'width' => 4.8, 'height' => 2.6, 'sill_height' => 0.3],
                             ],
                             'objects' => [
-                                ['id' => "sofa-{$lvl}02", 'type' => 'sofa', 'x' => 0, 'z' => -2.0, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#1e293b']],
-                                ['id' => "table-{$lvl}02", 'type' => 'table', 'x' => 0, 'z' => -0.2, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 0.9, 'material' => 'marble']],
-                                ['id' => "bar-{$lvl}02", 'type' => 'block', 'x' => 3.2, 'z' => 2.2, 'rot' => 0, 'p' => ['w' => 2.0, 'd' => 0.8, 'h' => 1.0, 'color' => '#0f172a', 'material' => 'wood', 'collide' => true]],
-                                ['id' => "plant-{$lvl}02", 'type' => 'plant', 'x' => 4.0, 'z' => -3.0, 'rot' => 0, 'p' => ['s' => 1.2]],
+                                ['id' => "hallway-table-{$lvl}", 'type' => 'table', 'x' => 0.0, 'z' => 4.5, 'rot' => 0, 'p' => ['w' => 1.8, 'd' => 0.7, 'material' => 'marble']],
+                                ['id' => "hallway-plant-1-{$lvl}", 'type' => 'plant', 'x' => -2.8, 'z' => 5.2, 'rot' => 0, 'p' => ['s' => 1.2]],
+                                ['id' => "hallway-plant-2-{$lvl}", 'type' => 'plant', 'x' => 2.8, 'z' => 5.2, 'rot' => 0, 'p' => ['s' => 1.2]],
                             ],
                         ],
                     ],
 
-                    // Suite C: Skyline Panoramic Suite & Terrace
+                    // Suite A (West Wing): Royal King Master Bedroom Suite
+                    [
+                        'id' => "hotel-room-suite-{$lvl}01",
+                        'name' => "Suite {$lvl}01 — Royal King Master Suite",
+                        'type' => 'bedroom',
+                        'color' => '#6366f1',
+                        'layout' => [
+                            'size' => ['w' => 14.0, 'd' => 14.0, 'h' => 3.6],
+                            'position' => ['x' => -11.0, 'z' => 0.0],
+                            'theme' => [
+                                'floor' => 'carpet',
+                                'floor_sound' => 'wood',
+                                'wall' => 'wood_panel',
+                                'wall_color' => '#faf5ff',
+                                'ceiling' => 'coffered',
+                                'ceiling_color' => '#ffffff',
+                                'light' => 'warm',
+                                'brightness' => 1.4,
+                            ],
+                            'doors' => [
+                                ['id' => "door-suite-{$lvl}01-corr", 'wall' => 'east', 'type' => 'standard', 'offset' => 1.5, 'width' => 1.4, 'height' => 2.6, 'material' => 'wood', 'label' => "Suite {$lvl}01 Entrance"],
+                                ['id' => "door-suite-{$lvl}01-terrace", 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => -3.0, 'width' => 2.4, 'height' => 2.6, 'material' => 'glass', 'label' => 'Private Terrace Access'],
+                            ],
+                            'windows' => [
+                                ['id' => "win-suite-{$lvl}01-s", 'wall' => 'south', 'offset' => -2.0, 'width' => 4.0, 'height' => 2.4, 'sill_height' => 0.4],
+                                ['id' => "win-suite-{$lvl}01-w", 'wall' => 'west', 'offset' => 0, 'width' => 4.0, 'height' => 2.4, 'sill_height' => 0.4],
+                            ],
+                            'objects' => [
+                                ['id' => "bed-{$lvl}01", 'type' => 'sofa', 'x' => -2.5, 'z' => -3.0, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#1e293b']],
+                                ['id' => "sofa-{$lvl}01", 'type' => 'sofa', 'x' => 2.8, 'z' => 1.5, 'rot' => 270, 'p' => ['w' => 2.8, 'color' => '#312e81']],
+                                ['id' => "table-{$lvl}01", 'type' => 'table', 'x' => 1.2, 'z' => 1.5, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 0.9, 'material' => 'marble']],
+                                ['id' => "tub-{$lvl}01", 'type' => 'block', 'x' => -4.5, 'z' => 3.5, 'rot' => 0, 'p' => ['w' => 2.2, 'd' => 1.2, 'h' => 0.65, 'material' => 'marble', 'color' => '#ffffff', 'collide' => true]],
+                                ['id' => "plant-{$lvl}01", 'type' => 'plant', 'x' => -5.2, 'z' => -5.2, 'rot' => 0, 'p' => ['s' => 1.3]],
+                            ],
+                        ],
+                    ],
+
+                    // Suite B (East Wing): Presidential Living & Dining Salon
+                    [
+                        'id' => "hotel-room-suite-{$lvl}02",
+                        'name' => "Suite {$lvl}02 — Presidential Grand Living & Dining Salon",
+                        'type' => 'living',
+                        'color' => '#3b82f6',
+                        'layout' => [
+                            'size' => ['w' => 14.0, 'd' => 14.0, 'h' => 3.6],
+                            'position' => ['x' => 11.0, 'z' => 0.0],
+                            'theme' => [
+                                'floor' => 'hardwood',
+                                'floor_sound' => 'wood',
+                                'wall' => 'plaster',
+                                'wall_color' => '#fff1f2',
+                                'ceiling' => 'gypsum_led',
+                                'ceiling_color' => '#ffffff',
+                                'light' => 'warm',
+                                'brightness' => 1.4,
+                            ],
+                            'doors' => [
+                                ['id' => "door-suite-{$lvl}02-corr", 'wall' => 'west', 'type' => 'standard', 'offset' => 1.5, 'width' => 1.4, 'height' => 2.6, 'material' => 'wood', 'label' => "Suite {$lvl}02 Entrance"],
+                                ['id' => "door-suite-{$lvl}02-terrace", 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 3.0, 'width' => 2.4, 'height' => 2.6, 'material' => 'glass', 'label' => 'Private Terrace Access'],
+                            ],
+                            'windows' => [
+                                ['id' => "win-suite-{$lvl}02-s", 'wall' => 'south', 'offset' => 2.0, 'width' => 4.0, 'height' => 2.4, 'sill_height' => 0.4],
+                                ['id' => "win-suite-{$lvl}02-e", 'wall' => 'east', 'offset' => 0, 'width' => 4.0, 'height' => 2.4, 'sill_height' => 0.4],
+                            ],
+                            'objects' => [
+                                ['id' => "sofa-{$lvl}02", 'type' => 'sofa', 'x' => -1.0, 'z' => -2.0, 'rot' => 0, 'p' => ['w' => 3.8, 'color' => '#831843']],
+                                ['id' => "table-{$lvl}02", 'type' => 'table', 'x' => -1.0, 'z' => 0.2, 'rot' => 0, 'p' => ['w' => 1.8, 'd' => 1.0, 'material' => 'marble']],
+                                ['id' => "bar-{$lvl}02", 'type' => 'block', 'x' => 4.2, 'z' => 2.5, 'rot' => 0, 'p' => ['w' => 2.8, 'd' => 0.9, 'h' => 1.1, 'color' => '#0f172a', 'material' => 'wood', 'collide' => true]],
+                                ['id' => "din-table-{$lvl}02", 'type' => 'table', 'x' => 3.2, 'z' => -3.2, 'rot' => 0, 'p' => ['w' => 2.2, 'd' => 1.1, 'material' => 'marble']],
+                            ],
+                        ],
+                    ],
+
+                    // Suite C (North Wing): Skyline Panorama Suite & Terrace
                     [
                         'id' => "hotel-room-suite-{$lvl}03",
-                        'name' => "Suite {$lvl}03 — Skyline Panoramic Suite & Terrace",
+                        'name' => "Suite {$lvl}03 — Skyline Panorama Suite & Terrace",
                         'type' => 'balcony',
                         'color' => '#f59e0b',
                         'layout' => [
-                            'size' => ['w' => 14.0, 'd' => 6.0, 'h' => 3.2],
-                            'position' => ['x' => 0.0, 'z' => -8.5],
+                            'size' => ['w' => 26.0, 'd' => 8.0, 'h' => 3.4],
+                            'position' => ['x' => 0.0, 'z' => -11.0],
                             'theme' => [
                                 'floor' => 'tile',
                                 'floor_sound' => 'marble',
@@ -1870,15 +1988,15 @@ class HouseSeeder extends Seeder
                                 'ceiling' => 'open_sky',
                                 'ceiling_color' => '#ffffff',
                                 'light' => 'warm',
-                                'brightness' => 1.4,
+                                'brightness' => 1.5,
                             ],
                             'doors' => [],
                             'windows' => [],
                             'objects' => [
-                                ['id' => "terrace-sofa-{$lvl}", 'type' => 'sofa', 'x' => 0, 'z' => 0.5, 'rot' => 0, 'p' => ['w' => 2.8, 'color' => '#334155']],
-                                ['id' => "terrace-tbl-{$lvl}", 'type' => 'table', 'x' => 0, 'z' => 1.8, 'rot' => 0, 'p' => ['w' => 1.4, 'd' => 0.8, 'material' => 'wood']],
-                                ['id' => "terrace-plant-1-{$lvl}", 'type' => 'plant', 'x' => -5.5, 'z' => 0.5, 'rot' => 0, 'p' => ['s' => 1.3]],
-                                ['id' => "terrace-plant-2-{$lvl}", 'type' => 'plant', 'x' => 5.5, 'z' => 0.5, 'rot' => 0, 'p' => ['s' => 1.3]],
+                                ['id' => "terrace-sofa-{$lvl}", 'type' => 'sofa', 'x' => 0.0, 'z' => 0.5, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#334155']],
+                                ['id' => "terrace-tbl-{$lvl}", 'type' => 'table', 'x' => 0.0, 'z' => 2.2, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 0.9, 'material' => 'wood']],
+                                ['id' => "terrace-plant-1-{$lvl}", 'type' => 'plant', 'x' => -8.5, 'z' => 0.5, 'rot' => 0, 'p' => ['s' => 1.3]],
+                                ['id' => "terrace-plant-2-{$lvl}", 'type' => 'plant', 'x' => 8.5, 'z' => 0.5, 'rot' => 0, 'p' => ['s' => 1.3]],
                             ],
                         ],
                     ],
@@ -1887,23 +2005,59 @@ class HouseSeeder extends Seeder
         }
 
         // -----------------------------------------------------------------
-        // LEVEL 19: Floor 20 — Presidential Sky Penthouse & Observatory (Elevation 65.8m, Height 4.2m)
+        // LEVEL 19: Floor 20 — Presidential Sky Penthouse & Observatory (Elevation 66.3m, Height 4.5m)
         // -----------------------------------------------------------------
         $floors[] = [
             'id' => 'hotel-floor-19',
             'name' => 'Floor 19 — Presidential Sky Penthouse & Rooftop Observatory',
             'level' => 19,
-            'height' => 4.2,
-            'elevation' => 65.8,
+            'height' => 4.5,
+            'elevation' => 66.3,
             'rooms' => [
+                // Room 1: Presidential Penthouse Grand Rotunda & Elevator Foyer
+                [
+                    'id' => 'hotel-room-penthouse-foyer',
+                    'name' => 'Presidential Penthouse Grand Rotunda & Elevator Foyer',
+                    'type' => 'living',
+                    'color' => '#d4af37',
+                    'layout' => [
+                        'size' => ['w' => 8.0, 'd' => 14.0, 'h' => 4.5],
+                        'position' => ['x' => 0.0, 'z' => 0.0],
+                        'theme' => [
+                            'floor' => 'marble',
+                            'floor_sound' => 'marble',
+                            'wall' => 'plaster',
+                            'wall_color' => '#fefce8',
+                            'ceiling' => 'gypsum_led',
+                            'ceiling_color' => '#ffffff',
+                            'light' => 'warm',
+                            'brightness' => 1.5,
+                        ],
+                        'doors' => [
+                            ['id' => 'door-suite-1901-corr', 'wall' => 'west', 'type' => 'standard', 'offset' => 1.5, 'width' => 1.6, 'height' => 2.8, 'material' => 'wood', 'label' => 'Presidential Master Suite'],
+                            ['id' => 'door-suite-1902-corr', 'wall' => 'east', 'type' => 'standard', 'offset' => 1.5, 'width' => 1.6, 'height' => 2.8, 'material' => 'wood', 'label' => 'Presidential Salon Entrance'],
+                            ['id' => 'door-suite-1903-deck', 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.8, 'height' => 2.8, 'material' => 'glass', 'label' => '360° Observatory Access'],
+                        ],
+                        'windows' => [
+                            ['id' => 'win-penth-city', 'wall' => 'south', 'offset' => 0, 'width' => 4.8, 'height' => 2.8, 'sill_height' => 0.3],
+                        ],
+                        'objects' => [
+                            ['id' => 'penth-table', 'type' => 'table', 'x' => 0.0, 'z' => 4.5, 'rot' => 0, 'p' => ['w' => 2.0, 'd' => 0.8, 'material' => 'marble']],
+                            ['id' => 'penth-plant-1', 'type' => 'plant', 'x' => -2.8, 'z' => 5.2, 'rot' => 0, 'p' => ['s' => 1.4]],
+                            ['id' => 'penth-plant-2', 'type' => 'plant', 'x' => 2.8, 'z' => 5.2, 'rot' => 0, 'p' => ['s' => 1.4]],
+                        ],
+                    ],
+                ],
+
+                // Room 2 (West Wing): Presidential Master Bedroom
                 [
                     'id' => 'hotel-room-suite-1901',
                     'name' => 'Suite 1901 — Presidential Sky Penthouse Master Bedroom',
                     'type' => 'bedroom',
                     'color' => '#8b5cf6',
                     'layout' => [
-                        'size' => ['w' => 11.0, 'd' => 9.0, 'h' => 4.2],
-                        'position' => ['x' => -9.0, 'z' => -2.0],
+                        'size' => ['w' => 14.0, 'd' => 14.0, 'h' => 4.5],
+                        'position' => ['x' => -11.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'parquet',
                             'floor_sound' => 'wood',
@@ -1912,31 +2066,34 @@ class HouseSeeder extends Seeder
                             'ceiling' => 'coffered',
                             'ceiling_color' => '#ffffff',
                             'light' => 'warm',
-                            'brightness' => 1.4,
+                            'brightness' => 1.5,
                         ],
                         'doors' => [
-                            ['id' => 'door-suite-1901-corr', 'wall' => 'east', 'type' => 'standard', 'offset' => 0, 'width' => 1.4, 'height' => 2.6, 'material' => 'wood', 'label' => 'Presidential Master Suite'],
-                            ['id' => 'door-suite-1901-deck', 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.8, 'height' => 2.6, 'material' => 'glass', 'label' => 'To Sunset Sky Deck'],
+                            ['id' => 'door-suite-1901-corr', 'wall' => 'east', 'type' => 'standard', 'offset' => 1.5, 'width' => 1.6, 'height' => 2.8, 'material' => 'wood', 'label' => 'Presidential Master Suite'],
+                            ['id' => 'door-suite-1901-deck', 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => -3.0, 'width' => 2.8, 'height' => 2.8, 'material' => 'glass', 'label' => 'To Sunset Sky Deck'],
                         ],
                         'windows' => [
-                            ['id' => 'win-suite-1901-s', 'wall' => 'south', 'offset' => 0, 'width' => 3.6, 'height' => 2.4, 'sill_height' => 0.4],
-                            ['id' => 'win-suite-1901-w', 'wall' => 'west', 'offset' => 0, 'width' => 3.2, 'height' => 2.4, 'sill_height' => 0.4],
+                            ['id' => 'win-suite-1901-s', 'wall' => 'south', 'offset' => -2.0, 'width' => 4.2, 'height' => 2.6, 'sill_height' => 0.4],
+                            ['id' => 'win-suite-1901-w', 'wall' => 'west', 'offset' => 0, 'width' => 4.2, 'height' => 2.6, 'sill_height' => 0.4],
                         ],
                         'objects' => [
-                            ['id' => 'bed-1901', 'type' => 'sofa', 'x' => -1.8, 'z' => -2.2, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#1e293b']],
-                            ['id' => 'sofa-1901', 'type' => 'sofa', 'x' => 2.2, 'z' => 1.2, 'rot' => 270, 'p' => ['w' => 2.2, 'color' => '#312e81']],
-                            ['id' => 'table-1901', 'type' => 'table', 'x' => 0.5, 'z' => 1.2, 'rot' => 0, 'p' => ['w' => 1.4, 'd' => 0.9, 'material' => 'marble']],
+                            ['id' => 'bed-1901', 'type' => 'sofa', 'x' => -2.5, 'z' => -3.0, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#1e1b4b']],
+                            ['id' => 'sofa-1901', 'type' => 'sofa', 'x' => 3.0, 'z' => 1.5, 'rot' => 270, 'p' => ['w' => 3.0, 'color' => '#312e81']],
+                            ['id' => 'table-1901', 'type' => 'table', 'x' => 1.2, 'z' => 1.5, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 1.0, 'material' => 'marble']],
+                            ['id' => 'tub-1901', 'type' => 'block', 'x' => -4.5, 'z' => 3.5, 'rot' => 0, 'p' => ['w' => 2.4, 'd' => 1.4, 'h' => 0.7, 'material' => 'marble', 'color' => '#ffffff', 'collide' => true]],
                         ],
                     ],
                 ],
+
+                // Room 3 (East Wing): Presidential Grand Salon & Sky Bar
                 [
                     'id' => 'hotel-room-suite-1902',
                     'name' => 'Suite 1902 — Presidential Grand Salon & Sky Bar',
                     'type' => 'living',
                     'color' => '#ec4899',
                     'layout' => [
-                        'size' => ['w' => 11.0, 'd' => 9.0, 'h' => 4.2],
-                        'position' => ['x' => 9.0, 'z' => -2.0],
+                        'size' => ['w' => 14.0, 'd' => 14.0, 'h' => 4.5],
+                        'position' => ['x' => 11.0, 'z' => 0.0],
                         'theme' => [
                             'floor' => 'marble',
                             'floor_sound' => 'marble',
@@ -1945,31 +2102,34 @@ class HouseSeeder extends Seeder
                             'ceiling' => 'gypsum_led',
                             'ceiling_color' => '#ffffff',
                             'light' => 'warm',
-                            'brightness' => 1.4,
+                            'brightness' => 1.5,
                         ],
                         'doors' => [
-                            ['id' => 'door-suite-1902-corr', 'wall' => 'west', 'type' => 'standard', 'offset' => 0, 'width' => 1.4, 'height' => 2.6, 'material' => 'wood', 'label' => 'Presidential Salon Entrance'],
-                            ['id' => 'door-suite-1902-deck', 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 0, 'width' => 2.8, 'height' => 2.6, 'material' => 'glass', 'label' => 'To Sunset Sky Deck'],
+                            ['id' => 'door-suite-1902-corr', 'wall' => 'west', 'type' => 'standard', 'offset' => 1.5, 'width' => 1.6, 'height' => 2.8, 'material' => 'wood', 'label' => 'Presidential Salon Entrance'],
+                            ['id' => 'door-suite-1902-deck', 'wall' => 'north', 'type' => 'sliding_glass', 'offset' => 3.0, 'width' => 2.8, 'height' => 2.8, 'material' => 'glass', 'label' => 'To Sunset Sky Deck'],
                         ],
                         'windows' => [
-                            ['id' => 'win-suite-1902-s', 'wall' => 'south', 'offset' => 0, 'width' => 3.6, 'height' => 2.4, 'sill_height' => 0.4],
-                            ['id' => 'win-suite-1902-e', 'wall' => 'east', 'offset' => 0, 'width' => 3.2, 'height' => 2.4, 'sill_height' => 0.4],
+                            ['id' => 'win-suite-1902-s', 'wall' => 'south', 'offset' => 2.0, 'width' => 4.2, 'height' => 2.6, 'sill_height' => 0.4],
+                            ['id' => 'win-suite-1902-e', 'wall' => 'east', 'offset' => 0, 'width' => 4.2, 'height' => 2.6, 'sill_height' => 0.4],
                         ],
                         'objects' => [
-                            ['id' => 'sofa-1902', 'type' => 'sofa', 'x' => 0, 'z' => -2.0, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#9f1239']],
-                            ['id' => 'table-1902', 'type' => 'table', 'x' => 0, 'z' => -0.2, 'rot' => 0, 'p' => ['w' => 1.8, 'd' => 1.0, 'material' => 'marble']],
-                            ['id' => 'sky-bar-1902', 'type' => 'block', 'x' => 3.2, 'z' => 2.2, 'rot' => 0, 'p' => ['w' => 2.4, 'd' => 0.9, 'h' => 1.1, 'color' => '#0f172a', 'material' => 'wood', 'collide' => true]],
+                            ['id' => 'sofa-1902', 'type' => 'sofa', 'x' => -1.0, 'z' => -2.0, 'rot' => 0, 'p' => ['w' => 4.0, 'color' => '#9f1239']],
+                            ['id' => 'table-1902', 'type' => 'table', 'x' => -1.0, 'z' => 0.2, 'rot' => 0, 'p' => ['w' => 2.0, 'd' => 1.1, 'material' => 'marble']],
+                            ['id' => 'sky-bar-1902', 'type' => 'block', 'x' => 4.5, 'z' => 2.5, 'rot' => 0, 'p' => ['w' => 3.2, 'd' => 1.0, 'h' => 1.15, 'color' => '#0f172a', 'material' => 'wood', 'collide' => true]],
+                            ['id' => 'din-table-1902', 'type' => 'table', 'x' => 3.5, 'z' => -3.2, 'rot' => 0, 'p' => ['w' => 2.4, 'd' => 1.2, 'material' => 'marble']],
                         ],
                     ],
                 ],
+
+                // Room 4 (North Wing): 360° Rooftop Observatory & Sunset Sky Deck
                 [
                     'id' => 'hotel-room-suite-1903',
                     'name' => 'Suite 1903 — 360° Rooftop Observatory & Sunset Sky Deck',
                     'type' => 'balcony',
                     'color' => '#d97706',
                     'layout' => [
-                        'size' => ['w' => 16.0, 'd' => 7.0, 'h' => 3.6],
-                        'position' => ['x' => 0.0, 'z' => -8.5],
+                        'size' => ['w' => 26.0, 'd' => 8.0, 'h' => 4.0],
+                        'position' => ['x' => 0.0, 'z' => -11.0],
                         'theme' => [
                             'floor' => 'tile',
                             'floor_sound' => 'marble',
@@ -1983,10 +2143,10 @@ class HouseSeeder extends Seeder
                         'doors' => [],
                         'windows' => [],
                         'objects' => [
-                            ['id' => 'sky-lounge-1903', 'type' => 'sofa', 'x' => 0, 'z' => 0.8, 'rot' => 0, 'p' => ['w' => 3.2, 'color' => '#1e293b']],
-                            ['id' => 'sky-table-1903', 'type' => 'table', 'x' => 0, 'z' => 2.2, 'rot' => 0, 'p' => ['w' => 1.6, 'd' => 0.9, 'material' => 'wood']],
-                            ['id' => 'sky-plant-1-1903', 'type' => 'plant', 'x' => -6.5, 'z' => 0.8, 'rot' => 0, 'p' => ['s' => 1.4]],
-                            ['id' => 'sky-plant-2-1903', 'type' => 'plant', 'x' => 6.5, 'z' => 0.8, 'rot' => 0, 'p' => ['s' => 1.4]],
+                            ['id' => 'sky-lounge-1903', 'type' => 'sofa', 'x' => 0.0, 'z' => 0.5, 'rot' => 0, 'p' => ['w' => 3.6, 'color' => '#1e293b']],
+                            ['id' => 'sky-table-1903', 'type' => 'table', 'x' => 0.0, 'z' => 2.2, 'rot' => 0, 'p' => ['w' => 1.8, 'd' => 1.0, 'material' => 'wood']],
+                            ['id' => 'sky-plant-1-1903', 'type' => 'plant', 'x' => -8.5, 'z' => 0.5, 'rot' => 0, 'p' => ['s' => 1.5]],
+                            ['id' => 'sky-plant-2-1903', 'type' => 'plant', 'x' => 8.5, 'z' => 0.5, 'rot' => 0, 'p' => ['s' => 1.5]],
                         ],
                     ],
                 ],
@@ -2000,8 +2160,8 @@ class HouseSeeder extends Seeder
             'thumbnail' => '/images/hotel-grand-celestial.jpg',
             'status' => 'published',
             'is_default' => false,
-            'plot_width' => 55.0,
-            'plot_depth' => 45.0,
+            'plot_width' => 70.0,
+            'plot_depth' => 60.0,
             'environment' => [
                 'sky' => 'sunset',
                 'sun_elevation' => 32,
@@ -2011,14 +2171,14 @@ class HouseSeeder extends Seeder
                     [
                         'id' => 'stairs-hotel-foyer',
                         'name' => 'Grand Foyer Stairs (Level 0 ➔ Level 1)',
-                        'startX' => -5.2,
+                        'startX' => -5.5,
                         'startY' => 0.0,
-                        'startZ' => 2.2,
-                        'endX' => -5.2,
-                        'endY' => 4.2,
-                        'endZ' => -1.8,
+                        'startZ' => 3.5,
+                        'endX' => -5.5,
+                        'endY' => 4.5,
+                        'endZ' => -1.5,
                         'width' => 1.4,
-                        'steps' => 22,
+                        'steps' => 24,
                         'style' => 'marble_modern',
                     ],
                 ],
@@ -2027,7 +2187,7 @@ class HouseSeeder extends Seeder
                         'id' => 'elevator-celestial-main',
                         'name' => 'High-Speed Luxury Glass Elevator (Floors 0-19)',
                         'x' => 0.0,
-                        'z' => -3.6,
+                        'z' => -3.5,
                         'width' => 3.6,
                         'depth' => 3.6,
                         'height' => 3.2,

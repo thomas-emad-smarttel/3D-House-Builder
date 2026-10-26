@@ -251,7 +251,8 @@ class HouseProjectTest extends TestCase
         $this->assertCount(20, $floors);
 
         $totalRooms = collect($floors)->sum(fn ($f) => count($f['rooms']));
-        $this->assertSame(60, $totalRooms);
+        $this->assertGreaterThanOrEqual(60, $totalRooms);
+        $this->assertSame(80, $totalRooms);
 
         $elevators = $hotel->getElevators();
         $this->assertCount(1, $elevators);
