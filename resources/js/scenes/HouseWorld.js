@@ -47,6 +47,33 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   }).sort((a, b) => a - b);
   if (!world.floorElevations.includes(0)) world.floorElevations.unshift(0);
 
+  // Stairs definition list (connects floors)
+  const stairsList = (houseData.stairs && Array.isArray(houseData.stairs) && houseData.stairs.length)
+    ? houseData.stairs
+    : [];
+
+  if (!stairsList.length && floors.length > 1) {
+    const fl0 = floors.find((f) => f.level === 0) || floors[0];
+    const fl1 = floors.find((f) => f.level === 1) || floors[1];
+    if (fl0 && fl1) {
+      const e0 = Number(fl0.elevation ?? 0);
+      const e1 = Number(fl1.elevation ?? (e0 + 3.4));
+      stairsList.push({
+        id: 'stairs-fl0-fl1',
+        startX: -9,
+        startY: e0,
+        startZ: 2.2,
+        endX: -9,
+        endY: e1,
+        endZ: -2.2,
+        width: 1.4,
+        steps: 18,
+        style: 'floating_wood',
+        name: 'Grand Foyer Stairs (Level 0 ➔ Level 1)',
+      });
+    }
+  }
+
   const scene = world.scene;
   const skyColor = env.sky_color || '#cfe0ff';
   scene.background = new THREE.Color(skyColor);
@@ -57,7 +84,7 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   const sun = new THREE.DirectionalLight('#fff4e0', env.sun_intensity ?? 1.15);
   sun.position.set(plotW * 0.7, 24, plotD * 0.8);
   sun.castShadow = SETTINGS.render.shadows;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   const camR = Math.max(plotW, plotD) * 0.9;
   Object.assign(sun.shadow.camera, {
     left: -camR,
@@ -67,9 +94,10 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
     near: 1,
     far: 80,
   });
-  // Smooth shadow bias to completely eliminate shadow acne and pixel jitter
+  // Precision shadow bias and normal offset without shadow acne
   sun.shadow.bias = -0.0001;
   sun.shadow.normalBias = 0.02;
+  sun.shadow.radius = 1.2;
   scene.add(sun, sun.target);
 
   /* ------------------------------------------------ Exterior Ground Lawn */
@@ -104,11 +132,103 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
 
   world.objects = new Map(); // o.id -> THREE.Object3D
 
+/**
+ * Deduplicate shared partition walls between adjacent rooms on the same floor.
+ * Eliminates overlapping duplicate wall meshes, coplanar z-fighting, and doorway blockage.
+ */
+function computeFloorWallDeduplication(rooms = []) {
+  const result = new Map();
+  for (const r of rooms) {
+    result.set(r.id, {
+      skipWalls: { south: false, north: false, east: false, west: false },
+      extraDoors: [],
+    });
+  }
+
+  const roomBoxes = rooms.map((r, idx) => {
+    const layout = r.layout || {};
+    const size = layout.size || { w: 10, d: 8, h: 3.2 };
+    const pos = layout.position || { x: 0, z: 0 };
+    const isBalcony = r.type === 'balcony' || layout.theme?.ceiling === 'open_sky';
+    const rw = Number(size.w) || 10;
+    const rd = Number(size.d) || 8;
+    const rx = Number(pos.x) || 0;
+    const rz = Number(pos.z) || 0;
+    return {
+      id: r.id,
+      idx,
+      room: r,
+      isBalcony,
+      rx,
+      rz,
+      minX: rx - rw / 2,
+      maxX: rx + rw / 2,
+      minZ: rz - rd / 2,
+      maxZ: rz + rd / 2,
+    };
+  });
+
+  const EPS = 0.08;
+
+  for (let i = 0; i < roomBoxes.length; i++) {
+    for (let j = 0; j < roomBoxes.length; j++) {
+      if (i === j) continue;
+      const A = roomBoxes[i];
+      const B = roomBoxes[j];
+
+      // A is south of B: touching along Z = A.minZ == B.maxZ
+      if (Math.abs(A.minZ - B.maxZ) < EPS) {
+        const overlapMinX = Math.max(A.minX, B.minX);
+        const overlapMaxX = Math.min(A.maxX, B.maxX);
+        if (overlapMaxX - overlapMinX > 0.3) {
+          if (B.isBalcony) {
+            result.get(B.id).skipWalls.south = true;
+          } else if (A.isBalcony) {
+            result.get(A.id).skipWalls.north = true;
+          } else if (A.idx < B.idx) {
+            result.get(B.id).skipWalls.south = true;
+            const bDoors = (B.room.layout?.doors || []).filter((d) => (d.wall || 'south').toLowerCase() === 'south');
+            for (const bd of bDoors) {
+              const worldDoorX = B.rx + (bd.offset || 0);
+              const aOffset = worldDoorX - A.rx;
+              result.get(A.id).extraDoors.push({ ...bd, wall: 'north', offset: aOffset });
+            }
+          }
+        }
+      }
+
+      // A is west of B: touching along X = A.maxX == B.minX
+      if (Math.abs(A.maxX - B.minX) < EPS) {
+        const overlapMinZ = Math.max(A.minZ, B.minZ);
+        const overlapMaxZ = Math.min(A.maxZ, B.maxZ);
+        if (overlapMaxZ - overlapMinZ > 0.3) {
+          if (B.isBalcony) {
+            result.get(B.id).skipWalls.west = true;
+          } else if (A.isBalcony) {
+            result.get(A.id).skipWalls.east = true;
+          } else if (A.idx < B.idx) {
+            result.get(B.id).skipWalls.west = true;
+            const bDoors = (B.room.layout?.doors || []).filter((d) => (d.wall || 'west').toLowerCase() === 'west');
+            for (const bd of bDoors) {
+              const worldDoorZ = B.rz + (bd.offset || 0);
+              const aOffset = worldDoorZ - A.rz;
+              result.get(A.id).extraDoors.push({ ...bd, wall: 'east', offset: aOffset });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
   /* ---------------------------------------------------- Build Floor Rooms */
   let playerSpawned = false;
 
   for (const floor of targetFloors) {
     const elevation = floor.elevation !== undefined ? Number(floor.elevation) : (Number(floor.level || 0) * 3.4);
+    const floorDedup = computeFloorWallDeduplication(floor.rooms || []);
 
     for (const room of floor.rooms || []) {
       const layout = room.layout || {};
@@ -136,7 +256,21 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
         playerSpawned = true;
       }
 
-      // 1. Floor Slab
+      // 1. Floor Slab (with optional stairwell void opening)
+      let roomVoidZone = null;
+      for (const st of stairsList) {
+        if (Math.abs(st.endY - elevation) < 0.3) {
+          const sMinX = Math.min(st.startX, st.endX) - (st.width || 1.4) / 2 - 0.1;
+          const sMaxX = Math.max(st.startX, st.endX) + (st.width || 1.4) / 2 + 0.1;
+          const sMinZ = Math.min(st.startZ, st.endZ) - 0.2;
+          const sMaxZ = Math.max(st.startZ, st.endZ) + 0.2;
+          if (rx - rw / 2 <= sMaxX && rx + rw / 2 >= sMinX && rz - rd / 2 <= sMaxZ && rz + rd / 2 >= sMinZ) {
+            roomVoidZone = { minX: sMinX, maxX: sMaxX, minZ: sMinZ, maxZ: sMaxZ };
+            break;
+          }
+        }
+      }
+
       const floorMat = getFloorMaterial(theme.floor);
       buildFloorSlab(world, {
         x: rx,
@@ -147,6 +281,7 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
         material: floorMat,
         roomId: room.id,
         floorId: floor.id,
+        voidZone: roomVoidZone,
       });
 
       // 2. Ceiling ("Clining")
@@ -166,15 +301,40 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
         ceilingGroup.visible = false;
       }
 
-      // 3. Room Interior Ambient Light
-      const roomLightColor = theme.light === 'cool' ? '#d8e8ff' : '#ffeacc';
-      const roomLightIntensity = (theme.brightness || 1.0) * 18;
-      const ptLight = new THREE.PointLight(roomLightColor, roomLightIntensity, Math.max(rw, rd) * 1.2, 2);
-      ptLight.position.set(rx, elevation + rh - 0.4, rz);
-      scene.add(ptLight);
+      // 3. Room Interior Ambient Light (indoor rooms only; balconies are naturally lit by sun/sky)
+      const isOutdoor = theme.ceiling === 'open_sky' || room.type === 'balcony';
+      if (!isOutdoor) {
+        const roomLightColor = theme.light === 'cool' ? '#d8e8ff' : '#ffeacc';
+        const roomLightIntensity = (theme.brightness || 1.0) * 16;
+        const ptLight = new THREE.PointLight(roomLightColor, roomLightIntensity, Math.max(rw, rd) * 1.2, 2);
+        ptLight.position.set(rx, elevation + rh - 0.4, rz);
+        scene.add(ptLight);
+      }
 
       // 4. Perimeter Walls with Cutouts for Doors & Windows ("Build doorس")
       const wallMat = getWallMaterial(theme.wall, theme.wall_color);
+      const wallColors = theme.wall_colors || {};
+      const wallMaterialsByWall = {
+        south: wallColors.south ? getWallMaterial(theme.wall, wallColors.south) : wallMat,
+        north: wallColors.north ? getWallMaterial(theme.wall, wallColors.north) : wallMat,
+        east: wallColors.east ? getWallMaterial(theme.wall, wallColors.east) : wallMat,
+        west: wallColors.west ? getWallMaterial(theme.wall, wallColors.west) : wallMat,
+      };
+
+      const dedup = floorDedup.get(room.id) || { skipWalls: {}, extraDoors: [] };
+      const baseDoors = layout.doors || [];
+      const combinedDoors = [...baseDoors];
+      for (const ed of dedup.extraDoors) {
+        const alreadyHas = combinedDoors.some(
+          (d) => (d.wall || '').toLowerCase() === (ed.wall || '').toLowerCase() && Math.abs((d.offset || 0) - (ed.offset || 0)) < 0.3
+        );
+        if (!alreadyHas) {
+          combinedDoors.push(ed);
+        }
+      }
+
+      const isBalconyRoom = room.type === 'balcony' || theme.ceiling === 'open_sky';
+
       buildRoomWallsWithCutouts(world, {
         rx,
         ry: elevation,
@@ -182,12 +342,15 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
         w: rw,
         d: rd,
         h: rh,
-        doors: layout.doors || [],
+        doors: combinedDoors,
         windows: layout.windows || [],
         wallMaterial: wallMat,
+        wallMaterialsByWall,
         accentColor: room.color || '#3b82f6',
         roomId: room.id,
         floorId: floor.id,
+        isBalcony: isBalconyRoom,
+        skipWalls: dedup.skipWalls,
       });
 
       // 5. Placed Furniture & Custom Objects
@@ -255,6 +418,13 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
           }
         }
       }
+    }
+  }
+
+  // 6. Build Architectural Stairs between floors
+  if (isAllFloors || targetFloors.length > 1 || activeFloorLevel === 0 || activeFloorLevel === 'all') {
+    for (const st of stairsList) {
+      buildArchitecturalStairs(world, st);
     }
   }
 

@@ -37,6 +37,7 @@
             'plot_depth' => (float) $house->plot_depth,
             'environment' => $house->environment ?? ['sky_color' => '#dfe6f2', 'sun_intensity' => 1.1],
             'floors' => $house->getFloors(),
+            'stairs' => $house->getStairs(),
         ],
         'all_houses' => $allHouses,
         'library' => $library,
@@ -96,6 +97,7 @@
             <div><dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Turn left and right</dd></div>
             <div><dt>Mouse</dt><dd>Look around (click canvas to capture pointer)</dd></div>
             <div><dt><kbd>Shift</kbd></dt><dd>Run / Walk faster</dd></div>
+            <div><dt><kbd>Space</kbd></dt><dd>Jump</dd></div>
             <div><dt><kbd>E</kbd></dt><dd>Open & Close Doors / Interact</dd></div>
             <div><dt><kbd>Esc</kbd></dt><dd>Release mouse / Close menu</dd></div>
             <div><dt><kbd>F</kbd></dt><dd>Toggle Fullscreen</dd></div>
@@ -109,7 +111,7 @@
 <div id="hud" class="hud" hidden>
     <div class="hud-top-left">
         <p id="hud-room" class="hud-room">{{ $house->title }}</p>
-        <div id="floor-selector-bar" style="display: flex; gap: 6px; margin-top: 6px;"></div>
+        <div id="floor-selector-bar" style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; max-width: min(80vw, 560px);"></div>
         <div class="hud-progress" aria-live="polite" style="display:none;">
             <div id="hud-progress-bar" class="progress-bar" aria-hidden="true"></div>
             <span id="hud-progress-text"></span>
@@ -140,7 +142,7 @@
         <kbd id="prompt-key">E</kbd><span id="prompt-text"></span>
     </div>
 
-    <p class="hud-hint" id="hud-hint">WASD walk · mouse look · Shift run · E interact · Esc menu</p>
+    <p class="hud-hint" id="hud-hint">WASD walk · Space jump · mouse look · Shift run · E interact · Esc menu</p>
 
     <button id="capture-hint" class="capture-hint" type="button" hidden>Click to look around</button>
 </div>

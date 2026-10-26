@@ -50,7 +50,7 @@ export class Game {
     this.reduced = prefersReducedMotion();
     this.pendingRoom = null;   // set from ?room=ID (used by the dashboard's "Test in game")
     this.houseData = data.house || null;
-    this.activeFloorLevel = 'all'; // Default to showing all floors with stairs!
+    this.activeFloorLevel = 'all';
     this.isDollhouse = false;
     const plotSize = Math.max(Number(this.houseData?.plot_width) || 30, Number(this.houseData?.plot_depth) || 30);
     this.orbit = { yaw: 0.6, pitch: 0.55, dist: plotSize * 0.95 };
@@ -62,7 +62,7 @@ export class Game {
   /* ------------------------------------------------------------- setup */
   async init() {
     if (this.houseData) {
-      this.hub = buildHouseWorld(this.ctx, this.houseData, this.activeFloorLevel);
+      this.hub = buildHouseWorld(this.ctx, this.houseData, 'all');
     } else {
       this.hub = buildMansion(this.ctx);
     }
@@ -278,39 +278,59 @@ export class Game {
     const bar = document.getElementById('floor-selector-bar');
     if (!bar || !this.houseData?.floors) return;
 
-    // "All Floors with Stairs" button
-    const allBtn = document.createElement('button');
-    allBtn.type = 'button';
-    allBtn.className = `chip${this.activeFloorLevel === 'all' ? ' chip-active' : ''}`;
-    allBtn.style.cssText = this.activeFloorLevel === 'all'
-      ? 'background:#3b82f6; color:#ffffff; font-weight:600;'
-      : 'background:rgba(30,41,59,0.85); color:#cbd5e1;';
-    allBtn.textContent = '🏰 All Floors & Stairs';
-    allBtn.onclick = () => this.switchFloor('all');
+    const chips = [];
+    const floors = this.houseData.floors || [];
 
-    const floorButtons = this.houseData.floors.map((fl) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      const isActive = this.activeFloorLevel === fl.level;
-      btn.className = `chip${isActive ? ' chip-active' : ''}`;
-      btn.style.cssText = isActive
-        ? 'background:#3b82f6; color:#ffffff; font-weight:600;'
-        : 'background:rgba(30,41,59,0.85); color:#cbd5e1;';
-      btn.textContent = fl.name;
-      btn.onclick = () => this.switchFloor(fl.level);
-      return btn;
+    // If multiple floors exist, show floor filter chips
+    if (floors.length > 1) {
+      const allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'chip';
+      const isAll = this.activeFloorLevel === 'all';
+      allBtn.style.cssText = isAll ? 'background:#8b5cf6; color:#fff; font-weight:700;' : 'background:rgba(30,41,59,0.85); color:#cbd5e1;';
+      allBtn.textContent = '🏢 All Floors';
+      allBtn.onclick = () => this.switchFloor('all');
+      chips.push(allBtn);
+
+      floors.forEach((fl) => {
+        const flBtn = document.createElement('button');
+        flBtn.type = 'button';
+        flBtn.className = 'chip';
+        const isCurrent = this.activeFloorLevel === fl.level;
+        flBtn.style.cssText = isCurrent ? 'background:#2563eb; color:#fff; font-weight:700;' : 'background:rgba(30,41,59,0.85); color:#cbd5e1;';
+        flBtn.textContent = `L${fl.level ?? 0}: ${fl.name || `Floor ${fl.level}`}`;
+        flBtn.onclick = () => this.switchFloor(fl.level ?? 0);
+        chips.push(flBtn);
+      });
+    }
+
+    // Room teleport chips across floors
+    const icons = { living: '🛋️', kitchen: '🍳', bedroom: '🛏️', bathroom: '🚿', balcony: '🌿' };
+    floors.forEach((fl) => {
+      const elev = fl.elevation !== undefined ? Number(fl.elevation) : (Number(fl.level || 0) * 3.4);
+      (fl.rooms || []).forEach((rm) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chip';
+        btn.style.cssText = 'background:rgba(15,23,42,0.85); color:#cbd5e1;';
+        const lvlSuffix = floors.length > 1 ? ` (L${fl.level ?? 0})` : '';
+        btn.textContent = `${icons[rm.type] || '🏠'} ${rm.name}${lvlSuffix}`;
+        btn.onclick = () => {
+          const rx = Number(rm.layout?.position?.x) || 0;
+          const rz = Number(rm.layout?.position?.z) || 0;
+          this.player.teleport(rx, rz, 0, 0, elev);
+          const hudRoom = document.getElementById('hud-room');
+          if (hudRoom) hudRoom.textContent = `${this.houseData.title} · ${rm.name}${lvlSuffix}`;
+        };
+        chips.push(btn);
+      });
     });
 
-    bar.replaceChildren(allBtn, ...floorButtons);
+    bar.replaceChildren(...chips);
 
     const hudRoom = document.getElementById('hud-room');
     if (hudRoom) {
-      if (this.activeFloorLevel === 'all') {
-        hudRoom.textContent = `${this.houseData.title} · All Floors & Stairs`;
-      } else {
-        const currentFl = this.houseData.floors.find((f) => f.level === this.activeFloorLevel) || this.houseData.floors[0];
-        hudRoom.textContent = `${this.houseData.title} · ${currentFl?.name || 'Ground'}`;
-      }
+      hudRoom.textContent = `${this.houseData.title}`;
     }
   }
 
@@ -500,7 +520,10 @@ export class Game {
 
     if (this.state === 'play') {
       if (this.isDollhouse) {
-        const cy = (this.activeFloorLevel || 0) * 3.4;
+        const maxElev = (this.world?.floorElevations?.[this.world.floorElevations.length - 1] || 0);
+        const cy = this.activeFloorLevel === 'all'
+          ? (maxElev * 0.45 + 1.8)
+          : (this.activeFloorLevel || 0) * 3.4 + 1.6;
         const y = cy + this.orbit.dist * Math.sin(this.orbit.pitch);
         const r = this.orbit.dist * Math.cos(this.orbit.pitch);
         const x = r * Math.sin(this.orbit.yaw);
@@ -521,8 +544,12 @@ export class Game {
 
   backdrop(t) {
     if (this.houseData) {
-      this.camera.position.set(Math.sin(t * 0.15) * 24, 12, Math.cos(t * 0.15) * 24);
-      this.camera.lookAt(0, 2.0, 0);
+      const maxElev = (this.world?.floorElevations?.[this.world.floorElevations.length - 1] || 0);
+      const targetY = maxElev * 0.45 + 1.8;
+      const camY = Math.max(12, maxElev + 5);
+      const camDist = Math.max(26, maxElev * 2 + 18);
+      this.camera.position.set(Math.sin(t * 0.15) * camDist, camY, Math.cos(t * 0.15) * camDist);
+      this.camera.lookAt(0, targetY, 0);
       return;
     }
     const end = this.hub.hallEnd;

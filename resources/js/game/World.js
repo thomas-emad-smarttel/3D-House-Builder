@@ -38,13 +38,13 @@ export class World {
     this.disposed = false;
   }
 
-  /** Box whose base sits at `y` (centre x/z). */
-  box({ x = 0, y = 0, z = 0, w = 1, h = 1, d = 1, material, collide = false, cast = true, receive = true, tile = 2, rotY = 0, parent } = {}) {
+  /** Box whose base sits at `y` (centre x/z) or centered at `y` when centerY is true. */
+  box({ x = 0, y = 0, z = 0, w = 1, h = 1, d = 1, material, collide = false, cast = true, receive = true, tile = 2, rotX = 0, rotY = 0, rotZ = 0, centerY = false, parent } = {}) {
     const geo = new THREE.BoxGeometry(w, h, d);
     uvBox(geo, w, h, d, tile);
     const mesh = new THREE.Mesh(geo, material);
-    mesh.position.set(x, y + h / 2, z);
-    mesh.rotation.y = rotY;
+    mesh.position.set(x, centerY ? y : y + h / 2, z);
+    mesh.rotation.set(rotX, rotY, rotZ);
     mesh.castShadow = cast;
     mesh.receiveShadow = receive;
     (parent ?? this.scene).add(mesh);
@@ -52,10 +52,11 @@ export class World {
     return mesh;
   }
 
-  cylinder({ x = 0, y = 0, z = 0, r = 0.5, rTop, h = 1, material, seg = 24, collide = false, cast = true, parent } = {}) {
+  cylinder({ x = 0, y = 0, z = 0, r = 0.5, rTop, h = 1, material, seg = 24, collide = false, cast = true, rotX = 0, rotY = 0, rotZ = 0, centerY = false, parent } = {}) {
     const geo = new THREE.CylinderGeometry(rTop ?? r, r, h, seg);
     const mesh = new THREE.Mesh(geo, material);
-    mesh.position.set(x, y + h / 2, z);
+    mesh.position.set(x, centerY ? y : y + h / 2, z);
+    mesh.rotation.set(rotX, rotY, rotZ);
     mesh.castShadow = cast; mesh.receiveShadow = true;
     (parent ?? this.scene).add(mesh);
     if (collide) mesh.userData.collider = this.collider(x, z, r * 1.8, r * 1.8, 0, y, y + h);

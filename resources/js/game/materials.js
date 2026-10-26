@@ -90,12 +90,9 @@ const texFactories = {
 
   plaster: () => canvasTexture(512, 512, (g, w, h) => {
     const r = rng(5);
-    g.fillStyle = '#f4f2ec'; g.fillRect(0, 0, w, h);
-    const grd = g.createLinearGradient(0, 0, w, h);
-    grd.addColorStop(0, 'rgba(255,255,255,0.05)');
-    grd.addColorStop(1, 'rgba(0,0,0,0.02)');
-    g.fillStyle = grd; g.fillRect(0, 0, w, h);
-    noise(g, w, h, r, 800, 0.04, ['#ffffff', '#e2e0d8']);
+    g.fillStyle = '#f8fafc'; g.fillRect(0, 0, w, h);
+    // Smooth isotropic plaster micro-texture without any diagonal or directional banding
+    noise(g, w, h, r, 1200, 0.025, ['#ffffff', '#f1f5f9', '#e2e8f0']);
   }, { repeat: true }),
 
   graphite: () => canvasTexture(512, 512, (g, w, h) => {
@@ -173,7 +170,7 @@ export const M = {
 
   glass: (color = '#9fd4ff', opacity = 0.18) =>
     memo(`glass:${color}:${opacity}`, () => std({
-      color, transparent: true, opacity, roughness: 0.05, metalness: 0.2, depthWrite: false,
+      color, transparent: true, opacity, roughness: 0.05, metalness: 0.2, depthWrite: false, side: THREE.DoubleSide,
     })),
 
   /** Unique (animatable) emissive material. Freed with the room. */

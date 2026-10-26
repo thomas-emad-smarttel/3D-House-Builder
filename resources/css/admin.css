@@ -203,12 +203,89 @@ a { color: inherit; }
 .layout:has(.house-builder-3d-app) .main,
 .main:has(.house-builder-3d-app) {
   max-width: none !important;
-  padding: 12px 16px 24px !important;
+  padding: 8px 12px 14px !important;
   overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 .layout:has(.house-builder-3d-app) {
   height: calc(100vh - 57px);
+  min-height: 0;
 }
+.house-builder-3d-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 480px;
+  background: #090d16;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #1e293b;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+}
+.builder-topbar {
+  background: #0d1322;
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  z-index: 20;
+  flex-shrink: 0;
+}
+.builder-topbar-row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.builder-topbar-row2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+  width: 100%;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+.builder-topbar-row2::-webkit-scrollbar {
+  height: 4px;
+}
+.builder-topbar-row2::-webkit-scrollbar-track {
+  background: transparent;
+}
+.builder-topbar-row2::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+
+.builder-inspector-panel {
+  width: clamp(300px, 28vw, 420px);
+  min-width: 280px;
+  max-width: 440px;
+  background: #0f172a;
+  border-left: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden !important;
+  z-index: 15;
+  flex-shrink: 0;
+}
+.builder-inspector-panel * {
+  box-sizing: border-box;
+}
+.builder-inspector-panel input,
+.builder-inspector-panel select,
+.builder-inspector-panel button {
+  max-width: 100%;
+}
+
 .house-builder-3d-app input[type="range"] {
   height: 6px;
   border-radius: 3px;
@@ -223,11 +300,42 @@ a { color: inherit; }
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 .house-builder-3d-app select:focus,
 .house-builder-3d-app input:focus {
   border-color: #3b82f6;
   outline: none;
+}
+
+@media (max-width: 1100px) {
+  .layout:has(.house-builder-3d-app) .nav {
+    display: none;
+  }
+  .layout:has(.house-builder-3d-app) {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .house-builder-3d-app .body-container {
+    flex-direction: column;
+  }
+  .builder-inspector-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    height: 48%;
+    border-left: none;
+    border-top: 1px solid #1e293b;
+  }
+  .viewport-wrap {
+    height: 52%;
+  }
+  .builder-topbar-row1 {
+    gap: 8px;
+  }
 }
 
 

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\House;
+use Database\Seeders\HouseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -35,6 +36,23 @@ class HouseViewerTest extends TestCase
             ->assertOk()
             ->assertSee('Skyline Duplex')
             ->assertSee('Ground Floor')
-            ->assertSee('First Floor');
+            ->assertSee('Main Living Room');
+    }
+
+    public function test_house_seeder_populates_rich_multi_floor_templates(): void
+    {
+        $this->seed(HouseSeeder::class);
+
+        $defaultHouse = House::where('is_default', true)->first();
+        $this->assertNotNull($defaultHouse);
+        $this->assertSame('modern-luxury-villa', $defaultHouse->slug);
+        $this->assertCount(3, $defaultHouse->floors);
+        $this->assertNotEmpty($defaultHouse->stairs);
+
+        $response = $this->get('/house/modern-luxury-villa');
+        $response->assertOk();
+        $response->assertSee('Modern Luxury Villa');
+        $response->assertSee('Penthouse Sky Lounge');
+        $response->assertSee('stairs-foyer-l0-l1');
     }
 }

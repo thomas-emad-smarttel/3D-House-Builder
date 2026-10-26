@@ -3,10 +3,12 @@ export const SETTINGS = {
   player: {
     eye: 1.65,
     radius: 0.34,
-    walk: 3.4,
-    sprint: 5.8,
-    accel: 12,
-    turnSpeed: 1.9,        // radians / second for the arrow keys
+    walk: 3.8,
+    sprint: 6.2,
+    jumpForce: 6.2,        // Realistic vertical jump impulse (Space key)
+    gravity: 18.0,         // Crisp downward gravity acceleration
+    accel: 24,             // Crisp, instantaneous acceleration (eliminates sluggish/ice lag)
+    turnSpeed: 2.2,        // radians / second for the arrow keys
     mouseSensitivity: 0.0022,
     touchSensitivity: 0.0042,
     fov: 72,
@@ -15,7 +17,7 @@ export const SETTINGS = {
     facing: 0.35,          // cosine of the max angle between view and target
   },
   render: {
-    maxPixelRatio: 2.0,
+    maxPixelRatio: 1.5,    // Silky smooth 60fps without heavy retina GPU throttling
     shadows: true,
     exposure: 1.15,
   },

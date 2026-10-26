@@ -121,6 +121,10 @@ export class AudioEngine {
     const f = { wood: 220, marble: 420, rubber: 150, carpet: 120, metal: 600 }[floor] ?? 220;
     this.burst({ freq: f * (0.85 + Math.random() * 0.3), q: 0.9, peak: sprint ? 0.5 : 0.34, d: 0.09, rate: 0.8 + Math.random() * 0.4 });
   }
+  jump() {
+    this.burst({ freq: 280, q: 0.8, type: 'bandpass', peak: 0.38, a: 0.01, d: 0.12, rate: 0.9 });
+    this.tone({ freq: 140, type: 'sine', peak: 0.18, a: 0.01, d: 0.15, slide: 90 });
+  }
   door() {
     this.burst({ freq: 300, q: 0.5, type: 'lowpass', peak: 0.5, a: 0.05, d: 0.7, rate: 0.5 });
     this.tone({ freq: 90, peak: 0.3, a: 0.02, d: 0.5, slide: -40, delay: 0.05 });

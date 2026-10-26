@@ -126,58 +126,70 @@ export function getFloorMaterial(materialName) {
  */
 export function getWallMaterial(wallStyle, wallColor = '#f3f4f6') {
   const s = (wallStyle || 'plaster').toLowerCase();
-  switch (s) {
-    case 'brick':
-      return getArchMaterial('brick', () => new THREE.MeshStandardMaterial({
-        map: archTextures.brick(),
-        roughness: 0.85,
-      }));
-    case 'stone':
-      return getArchMaterial('stone', () => new THREE.MeshStandardMaterial({
-        map: archTextures.stone(),
-        roughness: 0.8,
-      }));
-    case 'tile':
-      return M.tile();
-    case 'wood_panel':
-      return M.wood();
-    case 'plaster':
-    default:
-      return M.solid(wallColor || '#f3f4f6', { rough: 0.9, metal: 0.02 });
-  }
+  const hex = wallColor || '#f3f4f6';
+  const colorObj = new THREE.Color(hex);
+  const cacheKey = `wall:${s}:${hex}`;
+
+  return getArchMaterial(cacheKey, () => {
+    let mat;
+    switch (s) {
+      case 'brick':
+        mat = new THREE.MeshStandardMaterial({
+          map: archTextures.brick(),
+          color: colorObj,
+          roughness: 0.85,
+        });
+        break;
+      case 'stone':
+        mat = new THREE.MeshStandardMaterial({
+          map: archTextures.stone(),
+          color: colorObj,
+          roughness: 0.8,
+        });
+        break;
+      case 'tile':
+        mat = new THREE.MeshStandardMaterial({
+          map: M.tile().map,
+          color: colorObj,
+          roughness: 0.35,
+        });
+        break;
+      case 'wood_panel':
+        mat = new THREE.MeshStandardMaterial({
+          map: M.wood().map,
+          color: colorObj,
+          roughness: 0.55,
+        });
+        break;
+      case 'plaster':
+      default:
+        mat = new THREE.MeshStandardMaterial({
+          map: M.plaster().map,
+          color: colorObj,
+          roughness: 0.92,
+          metalness: 0.02,
+        });
+        break;
+    }
+    // Render back-faces to shadow map to completely eliminate self-shadow acne on walls
+    mat.shadowSide = THREE.BackSide;
+    return mat;
+  });
 }
 
 /**
  * Build Floor Slab for a room with optional void opening (for stairs/atrium)
  */
 export function buildFloorSlab(world, { x, y = 0, z, w, d, material, tile = 2.4, roomId, floorId, voidZone = null }) {
-  const slabThickness = 0.3;
-  const halfW = w / 2;
-  const halfD = d / 2;
-
-  let hasVoid = false;
-  let vx1 = 0, vx2 = 0, vz1 = 0, vz2 = 0;
-  if (voidZone) {
-    const rx1 = x - halfW, rx2 = x + halfW;
-    const rz1 = z - halfD, rz2 = z + halfD;
-    vx1 = Math.max(rx1, voidZone.minX);
-    vx2 = Math.min(rx2, voidZone.maxX);
-    vz1 = Math.max(rz1, voidZone.minZ);
-    vz2 = Math.min(rz2, voidZone.maxZ);
-    if (vx2 - vx1 > 0.1 && vz2 - vz1 > 0.1) {
-      hasVoid = true;
-    }
-  }
-
-  const makeSlab = (sx, sz, sw, sd) => {
-    if (sw < 0.05 || sd < 0.05) return null;
+  const slabThickness = 0.28;
+  if (!voidZone) {
     const mesh = world.box({
-      x: sx,
+      x,
       y: y - slabThickness,
-      z: sz,
-      w: sw,
+      z,
+      w,
       h: slabThickness,
-      d: sd,
+      d,
       material,
       tile,
       cast: false,
@@ -187,49 +199,102 @@ export function buildFloorSlab(world, { x, y = 0, z, w, d, material, tile = 2.4,
     if (roomId) mesh.userData.roomId = roomId;
     if (floorId) mesh.userData.floorId = floorId;
     return mesh;
-  };
-
-  if (!hasVoid) {
-    return makeSlab(x, z, w, d);
   }
 
-  const group = new THREE.Group();
-  world.scene.add(group);
+  // Segment slab around voidZone (e.g. stairwell opening)
+  const g = new THREE.Group();
+  world.scene.add(g);
+  const minX = x - w / 2;
+  const maxX = x + w / 2;
+  const minZ = z - d / 2;
+  const maxZ = z + d / 2;
 
-  const rx1 = x - halfW, rx2 = x + halfW;
-  const rz1 = z - halfD, rz2 = z + halfD;
+  const vMinX = Math.max(minX, voidZone.minX);
+  const vMaxX = Math.min(maxX, voidZone.maxX);
+  const vMinZ = Math.max(minZ, voidZone.minZ);
+  const vMaxZ = Math.min(maxZ, voidZone.maxZ);
 
-  if (vx1 > rx1) makeSlab((rx1 + vx1) / 2, z, vx1 - rx1, d);
-  if (rx2 > vx2) makeSlab((vx2 + rx2) / 2, z, rx2 - vx2, d);
-  if (vz1 > rz1) makeSlab((vx1 + vx2) / 2, (rz1 + vz1) / 2, vx2 - vx1, vz1 - rz1);
-  if (rz2 > vz2) makeSlab((vx1 + vx2) / 2, (vz2 + rz2) / 2, vx2 - vx1, rz2 - vz2);
-
-  return group;
+  // Left of void
+  if (vMinX > minX) {
+    const leftW = vMinX - minX;
+    world.box({
+      parent: g,
+      x: minX + leftW / 2,
+      y: y - slabThickness,
+      z,
+      w: leftW,
+      h: slabThickness,
+      d,
+      material,
+      tile,
+      cast: false,
+      receive: true,
+    });
+  }
+  // Right of void
+  if (maxX > vMaxX) {
+    const rightW = maxX - vMaxX;
+    world.box({
+      parent: g,
+      x: vMaxX + rightW / 2,
+      y: y - slabThickness,
+      z,
+      w: rightW,
+      h: slabThickness,
+      d,
+      material,
+      tile,
+      cast: false,
+      receive: true,
+    });
+  }
+  // Top of void
+  if (vMinZ > minZ) {
+    const topD = vMinZ - minZ;
+    world.box({
+      parent: g,
+      x: (vMinX + vMaxX) / 2,
+      y: y - slabThickness,
+      z: minZ + topD / 2,
+      w: vMaxX - vMinX,
+      h: slabThickness,
+      d: topD,
+      material,
+      tile,
+      cast: false,
+      receive: true,
+    });
+  }
+  // Bottom of void
+  if (maxZ > vMaxZ) {
+    const bottomD = maxZ - vMaxZ;
+    world.box({
+      parent: g,
+      x: (vMinX + vMaxX) / 2,
+      y: y - slabThickness,
+      z: vMaxZ + bottomD / 2,
+      w: vMaxX - vMinX,
+      h: slabThickness,
+      d: bottomD,
+      material,
+      tile,
+      cast: false,
+      receive: true,
+    });
+  }
+  g.userData.isFloorSlab = true;
+  if (roomId) g.userData.roomId = roomId;
+  if (floorId) g.userData.floorId = floorId;
+  return g;
 }
 
 /**
  * Build Ceiling ("Clining") with rich architectural styles
  */
-export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor = '#ffffff', roomId, floorId, voidZone = null }) {
+export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor = '#ffffff', roomId, floorId }) {
   const type = (ceilingType || 'gypsum_led').toLowerCase();
   if (type === 'open_sky') {
     return null; // Rooftop or open balcony has no ceiling slab
-  }
-
-  const halfW = w / 2;
-  const halfD = d / 2;
-  let hasVoid = false;
-  let vx1 = 0, vx2 = 0, vz1 = 0, vz2 = 0;
-  if (voidZone) {
-    const rx1 = x - halfW, rx2 = x + halfW;
-    const rz1 = z - halfD, rz2 = z + halfD;
-    vx1 = Math.max(rx1, voidZone.minX);
-    vx2 = Math.min(rx2, voidZone.maxX);
-    vz1 = Math.max(rz1, voidZone.minZ);
-    vz2 = Math.min(rz2, voidZone.maxZ);
-    if (vx2 - vx1 > 0.1 && vz2 - vz1 > 0.1) {
-      hasVoid = true;
-    }
   }
 
   const group = new THREE.Group();
@@ -243,38 +308,21 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
   const woodMat = M.wood();
   const emissiveLed = M.emissive('#ffd9a0', 1.8);
 
-  const makeCeilingPiece = (localX, localZ, pw, pd) => {
-    if (pw < 0.05 || pd < 0.05) return null;
-    return world.box({
-      parent: group,
-      x: localX,
-      y: 0,
-      z: localZ,
-      w: pw,
-      h: 0.2,
-      d: pd,
-      material: plasterMat,
-      cast: false,
-      receive: false,
-    });
-  };
+  // Main base ceiling slab
+  world.box({
+    parent: group,
+    x: 0,
+    y: 0,
+    z: 0,
+    w,
+    h: 0.2,
+    d,
+    material: plasterMat,
+    cast: false,
+    receive: false,
+  });
 
-  if (!hasVoid) {
-    makeCeilingPiece(0, 0, w, d);
-  } else {
-    // Relative to ceiling group position (x, z)
-    const lvx1 = vx1 - x, lvx2 = vx2 - x;
-    const lvz1 = vz1 - z, lvz2 = vz2 - z;
-    const lrx1 = -halfW, lrx2 = halfW;
-    const lrz1 = -halfD, lrz2 = halfD;
-
-    if (lvx1 > lrx1) makeCeilingPiece((lrx1 + lvx1) / 2, 0, lvx1 - lrx1, d);
-    if (lrx2 > lvx2) makeCeilingPiece((lvx2 + lrx2) / 2, 0, lrx2 - lvx2, d);
-    if (lvz1 > lrz1) makeCeilingPiece((lvx1 + lvx2) / 2, (lrz1 + lvz1) / 2, lvx2 - lvx1, lvz1 - lrz1);
-    if (lrz2 > lvz2) makeCeilingPiece((lvx1 + lvx2) / 2, (lvz2 + lrz2) / 2, lvx2 - lvx1, lrz2 - lvz2);
-  }
-
-  if (type === 'gypsum_led' && !hasVoid) {
+  if (type === 'gypsum_led') {
     // Gypsum dropped tray ceiling with hidden cove LED light around perimeter
     const margin = 0.8;
     const trayW = Math.max(1, w - margin * 2);
@@ -299,7 +347,7 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
     world.box({ parent: group, x: -(trayW / 2 + 0.05), y: -dropH / 2, z: 0, w: 0.03, h: 0.03, d: trayD, material: emissiveLed, cast: false });
     world.box({ parent: group, x: (trayW / 2 + 0.05), y: -dropH / 2, z: 0, w: 0.03, h: 0.03, d: trayD, material: emissiveLed, cast: false });
 
-    // Flush LED downlights at 4 corners
+    // Flush LED downlights at 4 corners (emissive glowing disks without heavy redundant PointLights)
     const spots = [
       [-trayW * 0.35, -trayD * 0.35],
       [trayW * 0.35, -trayD * 0.35],
@@ -316,11 +364,8 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
         h: 0.02,
         material: emissiveLed,
         seg: 16,
+        cast: false,
       });
-      // soft warm spot glow
-      const pl = new THREE.PointLight('#ffe8c8', 12, 6, 2);
-      pl.position.set(x + sx, y - dropH - 0.2, z + sz);
-      world.scene.add(pl);
     }
   } else if (type === 'wood_beams') {
     // Exposed architectural wooden timber beams across the room depth
@@ -394,6 +439,199 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
 }
 
 /**
+ * Build Architectural Stairs between floors with floating/solid treads, stringers, balustrade, and LED glow
+ */
+export function buildArchitecturalStairs(world, {
+  id = 'stairs-main',
+  startX = 0,
+  startY = 0,
+  startZ = 0,
+  endX = 0,
+  endY = 3.4,
+  endZ = 4.0,
+  width = 1.3,
+  steps = 18,
+  style = 'floating_wood',
+  stringerColor = '#1e293b',
+  handrailColor = '#d4af37',
+  hasBalustrade = true,
+  name = 'Stairs',
+}) {
+  const g = new THREE.Group();
+  world.scene.add(g);
+
+  const riser = (endY - startY) / steps;
+  const dx = endX - startX;
+  const dz = endZ - startZ;
+  const run = Math.hypot(dx, dz) || 0.001;
+  const tread = run / steps;
+  const angle = Math.atan2(dx, dz); // rotation around Y
+
+  const woodMat = style === 'marble' ? M.marble() : M.wood();
+  const steelMat = M.solid(stringerColor, { rough: 0.35, metal: 0.8 });
+  const glassMat = M.glass('#b8e2f8', 0.35);
+  const railMat = M.solid(handrailColor, { rough: 0.2, metal: 0.9 });
+  const ledGlow = M.emissive('#ffd9a0', 1.2);
+
+  // Position and orient group at bottom of stairs
+  g.position.set(startX, startY, startZ);
+  g.rotation.y = angle;
+
+  // Build each step tread
+  const treadH = 0.045;
+  const treadOverhang = 0.03;
+  const treadD = tread + treadOverhang;
+
+  for (let i = 0; i < steps; i++) {
+    const stepCenterZ = (i + 0.5) * tread;
+    const stepBaseY = i * riser;
+
+    // 1. Step Tread
+    world.box({
+      parent: g,
+      x: 0,
+      y: stepBaseY + riser - treadH,
+      z: stepCenterZ,
+      w: width,
+      h: treadH,
+      d: treadD,
+      material: woodMat,
+      tile: 1.5,
+    });
+
+    // 2. LED glow line under tread
+    world.box({
+      parent: g,
+      x: 0,
+      y: stepBaseY + riser - treadH - 0.008,
+      z: stepCenterZ + treadD / 2 - 0.015,
+      w: width - 0.08,
+      h: 0.008,
+      d: 0.015,
+      material: ledGlow,
+      cast: false,
+    });
+
+    // 3. Optional solid riser
+    if (style === 'solid' || style === 'marble') {
+      world.box({
+        parent: g,
+        x: 0,
+        y: stepBaseY + (riser - treadH) / 2,
+        z: stepCenterZ - treadD / 2 + 0.015,
+        w: width,
+        h: riser - treadH,
+        d: 0.03,
+        material: steelMat,
+      });
+    }
+  }
+
+  // 4. Central Spine Stringer
+  const spineW = 0.22;
+  const spineH = 0.16;
+  const spineSlopeLen = Math.hypot(run, endY - startY);
+  const pitchAngle = Math.atan2(endY - startY, run);
+
+  world.box({
+    parent: g,
+    x: 0,
+    y: (endY - startY) / 2 - 0.16,
+    z: run / 2,
+    w: spineW,
+    h: spineH,
+    d: spineSlopeLen,
+    rotX: -pitchAngle,
+    centerY: true,
+    material: steelMat,
+  });
+
+  // 5. Glass Balustrade & Metallic Handrail
+  if (hasBalustrade) {
+    const balustradeH = 0.95;
+    const glassThick = 0.015;
+    const leftRailX = -(width / 2) + 0.03;
+    const rightRailX = width / 2 - 0.03;
+
+    // Right Glass Balustrade Panel
+    world.box({
+      parent: g,
+      x: rightRailX,
+      y: (endY - startY) / 2 + balustradeH / 2,
+      z: run / 2,
+      w: glassThick,
+      h: balustradeH,
+      d: spineSlopeLen,
+      rotX: -pitchAngle,
+      centerY: true,
+      material: glassMat,
+      cast: false,
+    });
+
+    // Right Polished Handrail
+    world.box({
+      parent: g,
+      x: rightRailX,
+      y: (endY - startY) / 2 + balustradeH,
+      z: run / 2,
+      w: 0.045,
+      h: 0.045,
+      d: spineSlopeLen,
+      rotX: -pitchAngle,
+      centerY: true,
+      material: railMat,
+    });
+
+    // Left Polished Handrail
+    world.box({
+      parent: g,
+      x: leftRailX,
+      y: (endY - startY) / 2 + balustradeH,
+      z: run / 2,
+      w: 0.045,
+      h: 0.045,
+      d: spineSlopeLen,
+      rotX: -pitchAngle,
+      centerY: true,
+      material: railMat,
+    });
+  }
+
+  // Register with world.stairs for collision and climbing
+  if (!world.stairs) world.stairs = [];
+  const minX = Math.min(startX, endX) - width;
+  const maxX = Math.max(startX, endX) + width;
+  const minZ = Math.min(startZ, endZ) - 0.8;
+  const maxZ = Math.max(startZ, endZ) + 0.8;
+
+  world.stairs.push({
+    id,
+    name,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    startY,
+    endY,
+    bottom: { x: startX, z: startZ },
+    top: { x: endX, z: endZ },
+    dx,
+    dz,
+    lenSq: dx * dx + dz * dz,
+    width,
+  });
+
+  g.userData.isStairs = true;
+  g.userData.stairsId = id;
+  g.traverse((child) => {
+    child.userData.isStairs = true;
+    child.userData.stairsId = id;
+  });
+
+  return g;
+}
+
+/**
  * Build an Architectural Door with frame, panels, handle, and interaction!
  */
 export function buildArchitecturalDoor(world, {
@@ -413,8 +651,8 @@ export function buildArchitecturalDoor(world, {
   g.rotation.y = rotY;
   world.scene.add(g);
 
-  const frameT = 0.08;
-  const frameD = WALL_T + 0.04;
+  const frameT = 0.06;
+  const frameD = WALL_T - 0.004; // Recessed 2mm inside wall opening to eliminate coplanar z-fighting with wall plaster
   const frameMat = material === 'glass' ? M.solid('#1e293b', { rough: 0.3, metal: 0.8 }) : M.solid('#334155', { rough: 0.6 });
   const woodMat = M.wood();
   const glassMat = M.glass('#b8e2f8', 0.42);
@@ -422,16 +660,19 @@ export function buildArchitecturalDoor(world, {
   const brassMat = M.solid('#d9a85f', { rough: 0.25, metal: 0.85 });
 
   // 1. Outer Frame (Left post, Right post, Top lintel)
-  // Posts run from y = 0 to y = height
-  world.box({ parent: g, x: -(width / 2 + frameT / 2), y: 0, z: 0, w: frameT, h: height, d: frameD, material: frameMat });
-  world.box({ parent: g, x: (width / 2 + frameT / 2), y: 0, z: 0, w: frameT, h: height, d: frameD, material: frameMat });
-  // Top lintel runs from y = height to y = height + frameT
-  world.box({ parent: g, x: 0, y: height, z: 0, w: width + frameT * 2, h: frameT, d: frameD, material: frameMat });
+  // Perfectly seated INSIDE the wall opening cutout (-width/2 to +width/2):
+  world.box({ parent: g, x: -(width / 2 - frameT / 2), y: 0, z: 0, w: frameT, h: height, d: frameD, material: frameMat });
+  world.box({ parent: g, x: (width / 2 - frameT / 2), y: 0, z: 0, w: frameT, h: height, d: frameD, material: frameMat });
+  // Top lintel runs inside cutout from x = -width/2 to +width/2
+  world.box({ parent: g, x: 0, y: height - frameT / 2, z: 0, w: width, h: frameT, d: frameD, material: frameMat });
+
+  const innerW = width - frameT * 2;
+  const innerH = height - frameT;
 
   // 2. Door Panel Pivot Group (for smooth opening animation)
   const pivot = new THREE.Group();
   // Pivot placed at left frame hinge
-  pivot.position.set(-width / 2, 0, 0);
+  pivot.position.set(-(width / 2 - frameT), 0, 0);
   g.add(pivot);
 
   let pivotRight = null;
@@ -445,14 +686,14 @@ export function buildArchitecturalDoor(world, {
 
   if (type === 'front_entrance') {
     // Grand front entrance security door
-    const panelThick = 0.07;
+    const panelThick = 0.06;
     const doorSlab = world.box({
       parent: pivot,
-      x: width / 2,
+      x: innerW / 2,
       y: 0.01,
       z: 0,
-      w: width - 0.02,
-      h: height - 0.02,
+      w: innerW - 0.01,
+      h: innerH - 0.01,
       d: panelThick,
       material: M.solid('#1e293b', { rough: 0.4, metal: 0.4 }),
     });
@@ -460,11 +701,11 @@ export function buildArchitecturalDoor(world, {
     // Decorative brass vertical accent strip
     world.box({
       parent: doorSlab,
-      x: width * 0.28,
+      x: innerW * 0.28,
       y: 0,
       z: panelThick / 2 + 0.005,
       w: 0.05,
-      h: height - 0.3,
+      h: innerH - 0.3,
       d: 0.01,
       material: brassMat,
       cast: false,
@@ -473,7 +714,7 @@ export function buildArchitecturalDoor(world, {
     // Modern vertical long pull bar handle
     world.cylinder({
       parent: doorSlab,
-      x: width * 0.36,
+      x: innerW * 0.36,
       y: 0,
       z: panelThick / 2 + 0.04,
       r: 0.02,
@@ -483,7 +724,7 @@ export function buildArchitecturalDoor(world, {
     });
   } else if (type === 'double_french') {
     // Double French glass doors (two leafs swinging opposite)
-    const leafW = (width - 0.04) / 2;
+    const leafW = innerW / 2;
     const leafThick = 0.05;
 
     // Left Leaf on left pivot
@@ -492,8 +733,8 @@ export function buildArchitecturalDoor(world, {
       x: leafW / 2,
       y: 0.01,
       z: 0,
-      w: leafW,
-      h: height - 0.02,
+      w: leafW - 0.01,
+      h: innerH - 0.01,
       d: leafThick,
       material: frameMat,
     });
@@ -503,8 +744,8 @@ export function buildArchitecturalDoor(world, {
       x: 0,
       y: 0,
       z: 0,
-      w: leafW - 0.16,
-      h: height - 0.3,
+      w: leafW - 0.14,
+      h: innerH - 0.24,
       d: 0.015,
       material: glassMat,
       cast: false,
@@ -512,7 +753,7 @@ export function buildArchitecturalDoor(world, {
     // Left handle
     world.cylinder({
       parent: leftLeaf,
-      x: leafW / 2 - 0.06,
+      x: leafW / 2 - 0.05,
       y: -0.1,
       z: leafThick / 2 + 0.02,
       r: 0.015,
@@ -523,7 +764,7 @@ export function buildArchitecturalDoor(world, {
 
     // Right Leaf on right pivot
     pivotRight = new THREE.Group();
-    pivotRight.position.set(width / 2, 0, 0);
+    pivotRight.position.set(width / 2 - frameT, 0, 0);
     g.add(pivotRight);
 
     const rightLeaf = world.box({
@@ -531,8 +772,8 @@ export function buildArchitecturalDoor(world, {
       x: -leafW / 2,
       y: 0.01,
       z: 0,
-      w: leafW,
-      h: height - 0.02,
+      w: leafW - 0.01,
+      h: innerH - 0.01,
       d: leafThick,
       material: frameMat,
     });
@@ -541,15 +782,15 @@ export function buildArchitecturalDoor(world, {
       x: 0,
       y: 0,
       z: 0,
-      w: leafW - 0.16,
-      h: height - 0.3,
+      w: leafW - 0.14,
+      h: innerH - 0.24,
       d: 0.015,
       material: glassMat,
       cast: false,
     });
     world.cylinder({
       parent: rightLeaf,
-      x: -(leafW / 2 - 0.06),
+      x: -(leafW / 2 - 0.05),
       y: -0.1,
       z: leafThick / 2 + 0.02,
       r: 0.015,
@@ -559,17 +800,17 @@ export function buildArchitecturalDoor(world, {
     });
   } else if (type === 'sliding_glass') {
     // Sliding patio glass door with top track
-    const panelThick = 0.05;
-    // Top track
-    world.box({ parent: g, x: 0, y: height, z: 0, w: width * 1.5, h: 0.06, d: frameD + 0.04, material: frameMat });
+    const panelThick = 0.04;
+    // Top track inside opening
+    world.box({ parent: g, x: 0, y: height - frameT / 2, z: 0, w: width - 0.01, h: frameT, d: frameD, material: frameMat });
     // Glass sliding pane
     const slab = world.box({
       parent: pivot,
-      x: width / 2,
+      x: innerW / 2,
       y: 0.01,
-      z: 0.04,
-      w: width - 0.04,
-      h: height - 0.02,
+      z: 0.02,
+      w: innerW - 0.02,
+      h: innerH - 0.01,
       d: panelThick,
       material: frameMat,
     });
@@ -578,61 +819,50 @@ export function buildArchitecturalDoor(world, {
       x: 0,
       y: 0,
       z: 0,
-      w: width - 0.24,
-      h: height - 0.24,
+      w: innerW - 0.16,
+      h: innerH - 0.18,
       d: 0.018,
       material: glassMat,
       cast: false,
     });
   } else if (type === 'arch') {
-    // Clean open architectural arch (no door panel, decorative arch trim)
-    const archMat = M.solid('#f1f5f9', { rough: 0.8 });
-    world.cylinder({
-      parent: g,
-      x: 0,
-      y: height - width / 4,
-      z: 0,
-      r: width / 2,
-      h: frameD,
-      rotX: Math.PI / 2,
-      material: archMat,
-      seg: 24,
-    });
+    // Open cased architectural portal / archway between rooms:
+    // Completely clear walk-through passage without any door panel or obstructing cylinder.
   } else if (type === 'barn_wood') {
     // Rustic modern sliding barn door
     const barnMat = M.wood();
-    world.box({ parent: g, x: 0, y: height + 0.02, z: 0.12, w: width * 1.6, h: 0.06, d: 0.06, material: frameMat });
+    world.box({ parent: g, x: 0, y: height + 0.04, z: 0.12, w: width * 1.3, h: 0.05, d: 0.05, material: frameMat });
     const barnSlab = world.box({
       parent: pivot,
-      x: width / 2,
+      x: innerW / 2,
       y: 0.01,
       z: 0.12,
-      w: width + 0.08,
+      w: width + 0.06,
       h: height + 0.04,
-      d: 0.05,
+      d: 0.045,
       material: barnMat,
     });
     // Metal diagonal Z-brace
-    world.box({ parent: barnSlab, x: 0, y: 0, z: 0.03, w: width * 0.9, h: 0.08, d: 0.02, rotZ: 0.6, material: frameMat });
+    world.box({ parent: barnSlab, x: 0, y: 0, z: 0.025, w: width * 0.85, h: 0.06, d: 0.015, rotZ: 0.6, material: frameMat });
   } else {
     // Standard interior hinged door
     const doorSlab = world.box({
       parent: pivot,
-      x: width / 2,
+      x: innerW / 2,
       y: 0.01,
       z: 0,
-      w: width - 0.02,
-      h: height - 0.02,
-      d: 0.05,
+      w: innerW - 0.01,
+      h: innerH - 0.01,
+      d: 0.045,
       material: woodMat,
     });
 
     // Door handle & backplate
-    world.box({ parent: doorSlab, x: width * 0.38, y: -0.1, z: 0.03, w: 0.04, h: 0.16, d: 0.01, material: handleMat });
-    world.box({ parent: doorSlab, x: width * 0.38, y: -0.1, z: -0.03, w: 0.04, h: 0.16, d: 0.01, material: handleMat });
+    world.box({ parent: doorSlab, x: innerW * 0.38, y: -0.1, z: 0.03, w: 0.04, h: 0.16, d: 0.01, material: handleMat });
+    world.box({ parent: doorSlab, x: innerW * 0.38, y: -0.1, z: -0.03, w: 0.04, h: 0.16, d: 0.01, material: handleMat });
     // Lever handle
-    world.box({ parent: doorSlab, x: width * 0.34, y: -0.08, z: 0.05, w: 0.12, h: 0.025, d: 0.02, material: handleMat });
-    world.box({ parent: doorSlab, x: width * 0.34, y: -0.08, z: -0.05, w: 0.12, h: 0.025, d: 0.02, material: handleMat });
+    world.box({ parent: doorSlab, x: innerW * 0.34, y: -0.08, z: 0.05, w: 0.12, h: 0.025, d: 0.02, material: handleMat });
+    world.box({ parent: doorSlab, x: innerW * 0.34, y: -0.08, z: -0.05, w: 0.12, h: 0.025, d: 0.02, material: handleMat });
   }
 
   // Interactive door toggle (open / close)
@@ -710,53 +940,141 @@ export function buildArchitecturalWindow(world, {
   g.rotation.y = rotY;
   world.scene.add(g);
 
-  const frameT = 0.07;
-  const frameD = WALL_T + 0.05;
-  const frameMat = M.solid(frameColor, { rough: 0.35, metal: 0.6 });
-  const glassMat = M.glass('#b8e2f8', 0.42);
+  const frameT = 0.055;
+  const frameD = WALL_T - 0.004; // Recessed 2mm inside wall opening to eliminate coplanar z-fighting with wall plaster
+  const frameMat = M.solid(frameColor, { rough: 0.3, metal: 0.65 });
+  const glassMat = M.glass('#c8e4f5', 0.32);
   const sillMat = M.marble();
 
-  // 1. Window Sill (bottom ledge extending out)
+  // 1. Window Sill (bottom marble ledge with exterior & interior overhang)
   world.box({
     parent: g,
     x: 0,
-    y: -0.04,
+    y: -0.025,
     z: 0,
-    w: width + frameT * 2 + 0.12,
-    h: 0.05,
-    d: frameD + 0.10,
+    w: width + 0.08,
+    h: 0.04,
+    d: WALL_T + 0.08,
     material: sillMat,
   });
 
-  // 2. Outer Window Frame (Left post, Right post, Top lintel)
-  world.box({ parent: g, x: -(width / 2 + frameT / 2), y: 0, z: 0, w: frameT, h: height, d: frameD, material: frameMat });
-  world.box({ parent: g, x: (width / 2 + frameT / 2), y: 0, z: 0, w: frameT, h: height, d: frameD, material: frameMat });
-  world.box({ parent: g, x: 0, y: height, z: 0, w: width + frameT * 2, h: frameT, d: frameD, material: frameMat });
+  const innerW = Math.max(0.2, width - frameT * 2);
+  const innerH = Math.max(0.2, height - frameT * 2);
 
-  // 3. Center Mullion (divider) if width >= 1.6m
-  if (width >= 1.6) {
-    world.box({ parent: g, x: 0, y: 0, z: 0, w: frameT * 0.7, h: height, d: frameD * 0.8, material: frameMat });
+  // 2. Outer Window Frame (Left post, Right post, Top lintel, Bottom rail)
+  // Perfectly fills the entire wall opening cutout (-width/2 to +width/2, 0 to height):
+  world.box({ parent: g, x: -(width / 2 - frameT / 2), y: 0, z: 0, w: frameT, h: height, d: frameD, material: frameMat });
+  world.box({ parent: g, x: (width / 2 - frameT / 2), y: 0, z: 0, w: frameT, h: height, d: frameD, material: frameMat });
+  world.box({ parent: g, x: 0, y: height - frameT, z: 0, w: innerW, h: frameT, d: frameD, material: frameMat });
+  world.box({ parent: g, x: 0, y: 0, z: 0, w: innerW, h: frameT, d: frameD, material: frameMat });
+
+  // 3. Architectural Mullions (Dividers)
+  const mullionW = frameT * 0.7;
+  const mullionD = frameD * 0.85;
+
+  if (width >= 2.6) {
+    // 3-section panorama window with dual vertical mullions
+    world.box({ parent: g, x: -innerW / 4, y: frameT, z: 0, w: mullionW, h: innerH, d: mullionD, material: frameMat });
+    world.box({ parent: g, x: innerW / 4, y: frameT, z: 0, w: mullionW, h: innerH, d: mullionD, material: frameMat });
+  } else if (width >= 1.3) {
+    // 2-section window with central vertical mullion
+    world.box({ parent: g, x: 0, y: frameT, z: 0, w: mullionW, h: innerH, d: mullionD, material: frameMat });
   }
 
-  // 4. Subtle inner sash frame border (top & bottom rails)
-  const sashH = 0.035;
-  world.box({ parent: g, x: 0, y: 0, z: 0, w: width, h: sashH, d: frameD * 0.6, material: frameMat });
-  world.box({ parent: g, x: 0, y: height - sashH, z: 0, w: width, h: sashH, d: frameD * 0.6, material: frameMat });
+  // Optional upper transom horizontal bar for tall architectural windows (height >= 2.0m)
+  if (height >= 2.0) {
+    world.box({ parent: g, x: 0, y: frameT + innerH * 0.7, z: 0, w: innerW, h: frameT * 0.6, d: mullionD, material: frameMat });
+  }
 
-  // 5. Clear Translucent Double-Glazed Glass Pane (fully fills the opening between sashes)
+  // 4. Double-Glazed Glass Pane (fully spans the inner opening from bottom rail to top lintel)
   world.box({
     parent: g,
     x: 0,
-    y: sashH,
+    y: frameT + 0.002,
     z: 0,
-    w: width - 0.01,
-    h: height - sashH * 2,
-    d: 0.02,
+    w: innerW - 0.004,
+    h: innerH - 0.004,
+    d: 0.018,
     material: glassMat,
     cast: false,
   });
 
   return g;
+}
+
+/**
+ * Modern Architectural Balcony Railing (Glass panels + Stainless Steel handrail & base plinth)
+ */
+export function buildBalconyRailing(world, {
+  axis = 'x',
+  at,
+  from,
+  to,
+  ry = 0,
+  roomId,
+  floorId,
+  wallKey,
+}) {
+  const length = Math.abs(to - from);
+  if (length < 0.1) return null;
+  const mid = (from + to) / 2;
+  const railH = 1.05;
+  const group = new THREE.Group();
+  world.scene.add(group);
+
+  const glassMat = M.glass('#9fd4ff', 0.28);
+  const metalMat = M.solid('#1e293b', { rough: 0.25, metal: 0.85 });
+
+  const px = axis === 'z' ? at : mid;
+  const pz = axis === 'x' ? at : mid;
+
+  // Base metallic plinth
+  world.box({
+    parent: group,
+    x: px,
+    y: ry,
+    z: pz,
+    w: axis === 'x' ? length : 0.08,
+    h: 0.08,
+    d: axis === 'z' ? length : 0.08,
+    material: metalMat,
+    collide: true,
+  });
+
+  // Architectural safety glass panel
+  world.box({
+    parent: group,
+    x: px,
+    y: ry + 0.08,
+    z: pz,
+    w: axis === 'x' ? length : 0.02,
+    h: railH - 0.14,
+    d: axis === 'z' ? length : 0.02,
+    material: glassMat,
+    cast: false,
+    receive: false,
+  });
+
+  // Sleek ergonomic handrail
+  world.box({
+    parent: group,
+    x: px,
+    y: ry + railH - 0.06,
+    z: pz,
+    w: axis === 'x' ? length : 0.07,
+    h: 0.06,
+    d: axis === 'z' ? length : 0.07,
+    material: metalMat,
+    cast: true,
+    collide: true,
+  });
+
+  group.userData.isWall = true;
+  group.userData.isRailing = true;
+  group.userData.wallKey = wallKey;
+  if (roomId) group.userData.roomId = roomId;
+  if (floorId) group.userData.floorId = floorId;
+  return group;
 }
 
 /**
@@ -772,9 +1090,12 @@ export function buildRoomWallsWithCutouts(world, {
   doors = [],
   windows = [],
   wallMaterial,
+  wallMaterialsByWall = {},
   accentColor = '#3b82f6',
   roomId,
   floorId,
+  isBalcony = false,
+  skipWalls = {},
 }) {
   const halfW = w / 2;
   const halfD = d / 2;
@@ -812,17 +1133,29 @@ export function buildRoomWallsWithCutouts(world, {
 
   // Helper to build a segmented wall along axis with openings
   function buildSegmentedWall({ axis, at, from, to, openings, inwardRot, wallKey }) {
+    if (skipWalls && skipWalls[wallKey]) {
+      return; // Boundary is shared and built by adjacent room, or skipped for balcony!
+    }
+
+    if (isBalcony) {
+      // Modern terrace/balcony balustrade instead of high concrete wall
+      buildBalconyRailing(world, { axis, at, from, to, ry, roomId, floorId, wallKey });
+      return;
+    }
+
     const sorted = [...openings].sort((a, b) => a.c - b.c);
     let cursor = from;
+    const currentWallMaterial = wallMaterialsByWall[wallKey] || wallMaterial;
 
     const addSolid = (a, b, y = 0, segH = h, coll = true) => {
       const len = b - a;
       if (len < 0.02) return;
       const mid = (a + b) / 2;
       const mesh = world.box(axis === 'z'
-        ? { x: at, y: ry + y, z: rz + mid, w: WALL_T, h: segH, d: len, material: wallMaterial, collide: coll }
-        : { x: rx + mid, y: ry + y, z: at, w: len, h: segH, d: WALL_T, material: wallMaterial, collide: coll });
+        ? { x: at, y: ry + y, z: rz + mid, w: WALL_T, h: segH, d: len, material: currentWallMaterial, collide: coll }
+        : { x: rx + mid, y: ry + y, z: at, w: len, h: segH, d: WALL_T, material: currentWallMaterial, collide: coll });
       mesh.userData.isWall = true;
+      mesh.userData.wallKey = wallKey;
       if (roomId) mesh.userData.roomId = roomId;
       if (floorId) mesh.userData.floorId = floorId;
       return mesh;
@@ -851,6 +1184,7 @@ export function buildRoomWallsWithCutouts(world, {
       const opZ = axis === 'x' ? at : rz + op.c;
 
       if (op.type === 'door') {
+        const doorId = op.data.id || `${roomId}-door-${wallKey}-${Math.round(op.c * 10)}`;
         const doorRes = buildArchitecturalDoor(world, {
           x: opX,
           y: ry,
@@ -866,11 +1200,21 @@ export function buildRoomWallsWithCutouts(world, {
         const doorGroup = doorRes?.group || doorRes;
         if (doorGroup) {
           doorGroup.userData.isDoor = true;
-          doorGroup.userData.doorId = op.data.id || `${roomId}-door-${op.c}`;
+          doorGroup.userData.doorId = doorId;
+          doorGroup.userData.wallKey = wallKey;
           if (roomId) doorGroup.userData.roomId = roomId;
           if (floorId) doorGroup.userData.floorId = floorId;
+
+          doorGroup.traverse((child) => {
+            child.userData.isDoor = true;
+            child.userData.doorId = doorId;
+            child.userData.wallKey = wallKey;
+            if (roomId) child.userData.roomId = roomId;
+            if (floorId) child.userData.floorId = floorId;
+          });
         }
       } else if (op.type === 'window') {
+        const windowId = op.data.id || `${roomId}-win-${wallKey}-${Math.round(op.c * 10)}`;
         const winGroup = buildArchitecturalWindow(world, {
           x: opX,
           y: ry,
@@ -883,9 +1227,18 @@ export function buildRoomWallsWithCutouts(world, {
         });
         if (winGroup) {
           winGroup.userData.isWindow = true;
-          winGroup.userData.windowId = op.data.id || `${roomId}-win-${op.c}`;
+          winGroup.userData.windowId = windowId;
+          winGroup.userData.wallKey = wallKey;
           if (roomId) winGroup.userData.roomId = roomId;
           if (floorId) winGroup.userData.floorId = floorId;
+
+          winGroup.traverse((child) => {
+            child.userData.isWindow = true;
+            child.userData.windowId = windowId;
+            child.userData.wallKey = wallKey;
+            if (roomId) child.userData.roomId = roomId;
+            if (floorId) child.userData.floorId = floorId;
+          });
         }
       }
 
@@ -939,171 +1292,4 @@ export function buildRoomWallsWithCutouts(world, {
     inwardRot: -Math.PI / 2,
     wallKey: 'east',
   });
-}
-
-/**
- * Build Architectural Open-Riser Modern Luxury Stairs
- * Connects two elevations with wooden/marble treads, floating steel stringers,
- * glass balustrade with stainless handrail, and soft step lighting!
- */
-export function buildArchitecturalStairs(world, {
-  startX,
-  startY = 0,
-  startZ,
-  endX,
-  endY,
-  endZ,
-  width = 1.3,
-  steps = 17,
-  treadMaterial,
-  stringerColor = '#1e293b',
-  handrailColor = '#d4af37',
-  hasBalustrade = true,
-  name = 'Stairs',
-}) {
-  const g = new THREE.Group();
-  world.scene.add(g);
-
-  const riser = (endY - startY) / steps;
-  const dx = endX - startX;
-  const dz = endZ - startZ;
-  const run = Math.hypot(dx, dz);
-  const tread = run / steps;
-  const angle = Math.atan2(dx, dz); // rotation around Y
-
-  const woodMat = treadMaterial || M.wood();
-  const steelMat = M.solid(stringerColor, { rough: 0.35, metal: 0.8 });
-  const glassMat = M.glass('#b8e2f8', 0.35);
-  const railMat = M.solid(handrailColor, { rough: 0.2, metal: 0.9 });
-  const ledGlow = M.emissive('#ffd9a0', 1.2);
-
-  // Position and orient group at bottom of stairs
-  g.position.set(startX, startY, startZ);
-  g.rotation.y = angle;
-
-  // Build each step tread
-  const treadH = 0.045;
-  const treadOverhang = 0.03;
-  const treadD = tread + treadOverhang;
-
-  for (let i = 0; i < steps; i++) {
-    const stepCenterZ = (i + 0.5) * tread;
-    const stepBaseY = i * riser;
-
-    // 1. Step Tread
-    world.box({
-      parent: g,
-      x: 0,
-      y: stepBaseY + riser - treadH,
-      z: stepCenterZ,
-      w: width,
-      h: treadH,
-      d: treadD,
-      material: woodMat,
-      receive: true,
-      cast: true,
-    });
-
-    // 2. Hidden LED glow strip under each tread nosing
-    world.box({
-      parent: g,
-      x: 0,
-      y: stepBaseY + riser - treadH - 0.012,
-      z: stepCenterZ + treadD / 2 - 0.02,
-      w: width - 0.1,
-      h: 0.01,
-      d: 0.015,
-      material: ledGlow,
-      cast: false,
-    });
-  }
-
-  // 3. Floating Twin Structural Steel Stringers under treads
-  const stringerW = 0.08;
-  const stringerH = 0.14;
-  const slopeLen = Math.hypot(run, endY - startY);
-  const pitchAngle = Math.atan2(endY - startY, run);
-
-  const stringerPositions = [-width / 2 + 0.16, width / 2 - 0.16];
-  for (const sx of stringerPositions) {
-    const stringerGroup = new THREE.Group();
-    stringerGroup.position.set(sx, (endY - startY) / 2, run / 2);
-    stringerGroup.rotation.x = -pitchAngle;
-    g.add(stringerGroup);
-
-    world.box({
-      parent: stringerGroup,
-      x: 0,
-      y: -stringerH / 2,
-      z: 0,
-      w: stringerW,
-      h: stringerH,
-      d: slopeLen,
-      material: steelMat,
-    });
-  }
-
-  // 4. Architectural Glass Balustrade & Handrail on open side
-  if (hasBalustrade) {
-    const balustradeH = 0.95;
-    const railRadius = 0.024;
-    const sideX = width / 2 + 0.02;
-
-    // Glass panel running along the slope
-    const glassGroup = new THREE.Group();
-    glassGroup.position.set(sideX, (endY - startY) / 2 + balustradeH / 2, run / 2);
-    glassGroup.rotation.x = -pitchAngle;
-    g.add(glassGroup);
-
-    world.box({
-      parent: glassGroup,
-      x: 0,
-      y: 0,
-      z: 0,
-      w: 0.018,
-      h: balustradeH,
-      d: slopeLen + 0.2,
-      material: glassMat,
-      cast: false,
-    });
-
-    // Handrail
-    const railGroup = new THREE.Group();
-    railGroup.position.set(sideX, (endY - startY) / 2 + balustradeH, run / 2);
-    railGroup.rotation.x = -pitchAngle;
-    g.add(railGroup);
-
-    world.cylinder({
-      parent: railGroup,
-      x: 0,
-      y: 0,
-      z: 0,
-      r: railRadius,
-      h: slopeLen + 0.25,
-      rotX: Math.PI / 2,
-      material: railMat,
-      seg: 16,
-    });
-  }
-
-  // 5. Register in world.stairs for smooth player climbing!
-  world.stairs ||= [];
-  world.stairs.push({
-    name,
-    bottom: { x: startX, y: startY, z: startZ },
-    top: { x: endX, y: endY, z: endZ },
-    minX: Math.min(startX, endX) - width / 2 - 0.4,
-    maxX: Math.max(startX, endX) + width / 2 + 0.4,
-    minZ: Math.min(startZ, endZ) - width / 2 - 0.4,
-    maxZ: Math.max(startZ, endZ) + width / 2 + 0.4,
-    width,
-    run,
-    startY,
-    endY,
-    dx,
-    dz,
-    lenSq: dx * dx + dz * dz,
-  });
-
-  return g;
 }

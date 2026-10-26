@@ -7,9 +7,6 @@ import {
   projectsSection,
   house3DSection,
   specsSection,
-  floorsSection,
-  roomsSection,
-  doorsAndWindowsSection,
 } from './houseSections.js';
 import { designerSection } from './designer/Designer.js';
 import { mediaSection } from './library.js';
@@ -31,9 +28,6 @@ const SECTIONS = [
   },
   { id: 'projects', label: '🏠 House Projects', render: projectsSection, prefixes: [] },
   { id: 'specs', label: '📐 House Specs & Plot', render: specsSection, prefixes: ['title', 'plot_width', 'plot_depth'] },
-  { id: 'floors', label: '🏢 Floors & Levels', render: floorsSection, prefixes: ['floors'] },
-  { id: 'rooms', label: '🛋️ Rooms & Ceilings', render: roomsSection, prefixes: ['floors'] },
-  { id: 'doors', label: '🚪 Doors & Windows', render: doorsAndWindowsSection, prefixes: ['floors'] },
   { id: 'designer', label: '✏️ Room Designer (3D & 2D)', render: designerSection, prefixes: [] },
   { id: 'viewer3d', label: '🎮 Live 3D House Tour', render: house3DSection, prefixes: [] },
   { id: 'library', label: '📚 3D Object Library', render: objectLibrarySection, prefixes: [] },
@@ -139,15 +133,31 @@ export class Editor {
         plot_depth: this.house.plot_depth,
         environment: this.house.environment,
         floors: this.house.floors,
+        stairs: this.house.stairs || this.house.environment?.stairs || [],
       };
 
       const res = await api('PUT', `/admin/houses/${this.house.id}`, payload);
-      this.house = res.house;
-      this.state = this.house;
+      if (res.house) {
+        const returnedFloors = res.house.floors || res.house.floors_data;
+        if (returnedFloors && Array.isArray(returnedFloors) && returnedFloors.length) {
+          this.house.floors = returnedFloors;
+        }
+        if (res.house.stairs) {
+          this.house.stairs = res.house.stairs;
+        }
+        this.house.id = res.house.id;
+        this.house.title = res.house.title;
+        this.house.slug = res.house.slug;
+        this.house.status = res.house.status;
+        this.house.plot_width = res.house.plot_width;
+        this.house.plot_depth = res.house.plot_depth;
+        this.house.environment = res.house.environment;
+        this.state = this.house;
+      }
       this.errors = {};
       this.dirty = false;
       await this.loadHousesList();
-      this.toast('House saved! Reload 3D view to see changes.');
+      this.toast('House saved successfully!');
     } catch (e) {
       if (e.status === 422 && e.data?.errors) {
         this.errors = e.data.errors;
@@ -158,7 +168,9 @@ export class Editor {
     } finally {
       this.saving = false;
       this.updateStatus();
-      this.render();
+      if (this.section !== 'builder3d') {
+        this.render();
+      }
     }
   }
 

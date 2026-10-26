@@ -120,7 +120,8 @@ export class Input {
     if (len > 1) { x /= len; z /= len; }
     const turn = (k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0);
     const sprint = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(this.joy.x, this.joy.y) > 0.97;
-    return { x, z, turn, sprint };
+    const jump = k.has('Space');
+    return { x, z, turn, sprint, jump };
   }
 
   reset() {

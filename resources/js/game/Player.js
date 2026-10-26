@@ -12,6 +12,8 @@ export class Player {
     this.pitch = 0;
     this.vx = 0;
     this.vz = 0;
+    this.vy = 0;
+    this.isGrounded = true;
     this.bob = 0;
     this.stepDist = 0;
     this.reduced = prefersReducedMotion();
@@ -29,6 +31,8 @@ export class Player {
     }
     this.vx = 0;
     this.vz = 0;
+    this.vy = 0;
+    this.isGrounded = true;
     this.bob = 0;
     this.stepDist = 0;
     this.applyCamera();
@@ -56,7 +60,7 @@ export class Player {
     this.vz += (tz - this.vz) * k;
 
     const dx = this.vx * dt; const dz = this.vz * dt;
-    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.1));
+    const steps = Math.max(1, Math.min(4, Math.ceil(Math.hypot(dx, dz) / 0.25)));
     for (let i = 0; i < steps; i++) {
       this.x += dx / steps; this.z += dz / steps;
       resolveCollisions(this, S.radius, world.colliders, world.bounds);
@@ -68,7 +72,7 @@ export class Player {
     if (world.stairs && world.stairs.length > 0) {
       for (const s of world.stairs) {
         if (this.x >= s.minX && this.x <= s.maxX && this.z >= s.minZ && this.z <= s.maxZ) {
-          if (this.y >= s.startY - 0.9 && this.y <= s.endY + 0.9) {
+          if (this.y >= s.startY - 0.8 && this.y <= s.endY + 0.8) {
             const px = this.x - s.bottom.x;
             const pz = this.z - s.bottom.z;
             const t = Math.max(0, Math.min(1, (px * s.dx + pz * s.dz) / s.lenSq));
@@ -98,17 +102,44 @@ export class Player {
       this.currentElevation = bestFloor;
     }
 
-    // Smooth vertical rise / descend
-    this.y += (targetElevation - this.y) * Math.min(1, dt * 15);
+    // Jumping physics & gravity
+    const jumpForce = S.jumpForce || 6.2;
+    const gravity = S.gravity || 18.0;
+
+    if (a.jump && this.isGrounded) {
+      this.vy = jumpForce;
+      this.isGrounded = false;
+      audio?.jump();
+    }
+
+    if (this.isGrounded && this.y > targetElevation + 0.25) {
+      this.isGrounded = false;
+    }
+
+    if (!this.isGrounded) {
+      this.vy -= gravity * dt;
+      this.y += this.vy * dt;
+
+      // Landing check on current floor elevation or stair slope
+      if (this.y <= targetElevation) {
+        this.y = targetElevation;
+        this.vy = 0;
+        this.isGrounded = true;
+        audio?.footstep(a.sprint, world.ambient?.floor);
+      }
+    } else {
+      this.vy = 0;
+      this.y += (targetElevation - this.y) * Math.min(1, dt * 15);
+    }
 
     const moved = Math.hypot(this.vx, this.vz);
-    if (moved > 0.4) {
+    if (moved > 0.4 && this.isGrounded) {
       this.bob += moved * dt * 2.4;
       this.stepDist += moved * dt;
       const stride = a.sprint ? 2.1 : 1.55;
       if (this.stepDist > stride) { this.stepDist = 0; audio?.footstep(a.sprint, world.ambient?.floor); }
     }
-    this.applyCamera(moved / S.walk);
+    this.applyCamera(this.isGrounded ? (moved / S.walk) : 0);
   }
 
   applyCamera(moveAmt = 0) {

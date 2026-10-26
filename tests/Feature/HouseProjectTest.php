@@ -197,6 +197,8 @@ class HouseProjectTest extends TestCase
         ]);
 
         $response->assertOk();
+        $response->assertJsonPath('house.floors.0.rooms.0.layout.theme.ceiling', 'coffered');
+        $response->assertJsonPath('house.floors.0.rooms.0.layout.theme.floor', 'marble');
         $this->assertDatabaseHas('houses', ['title' => 'Architectural Showcase Updated']);
 
         $refreshed = House::find($house->id);

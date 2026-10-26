@@ -79,6 +79,7 @@ class HouseProjectController extends Controller
                     'ground' => 'grass',
                 ],
                 'floors' => $house->getFloors(),
+                'stairs' => $house->getStairs(),
             ],
             'library' => $this->library->all(),
             'meta' => [
@@ -205,6 +206,7 @@ class HouseProjectController extends Controller
             'plot_depth' => 'nullable|numeric|min:10|max:100',
             'environment' => 'nullable|array',
             'floors' => 'nullable|array',
+            'stairs' => 'nullable|array',
         ]);
 
         if (isset($validated['title']) && $validated['title'] !== $house->title) {
@@ -229,6 +231,11 @@ class HouseProjectController extends Controller
         if (isset($validated['environment'])) {
             $house->environment = $validated['environment'];
         }
+        if (array_key_exists('stairs', $validated)) {
+            $env = $house->environment ?? [];
+            $env['stairs'] = $validated['stairs'];
+            $house->environment = $env;
+        }
         if (isset($validated['floors'])) {
             $house->floors_data = $validated['floors'];
         }
@@ -237,7 +244,19 @@ class HouseProjectController extends Controller
 
         return response()->json([
             'message' => 'House saved successfully!',
-            'house' => $house,
+            'house' => [
+                'id' => $house->id,
+                'title' => $house->title,
+                'slug' => $house->slug,
+                'description' => $house->description,
+                'status' => $house->status,
+                'is_default' => (bool) $house->is_default,
+                'plot_width' => (float) $house->plot_width,
+                'plot_depth' => (float) $house->plot_depth,
+                'environment' => $house->environment,
+                'floors' => $house->getFloors(),
+                'stairs' => $house->getStairs(),
+            ],
             'saved_at' => now()->toIso8601String(),
         ]);
     }
