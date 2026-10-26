@@ -197,7 +197,7 @@ $e = $mk(function ($r) {
         $r['layout']['objects'][] = ['id' => "l$k", 'type' => 'light', 'x' => $k - 3, 'z' => 0, 'rot' => 0, 'p' => []];
     }
 
-return $r;
+    return $r;
 });
 $ok(count(array_filter(array_keys($e), fn ($k) => str_ends_with($k, 'objects.9') || str_contains($k, 'objects.9'))) >= 1, 'more than 6 lights rejected');
 $e = $mk(function ($r) {

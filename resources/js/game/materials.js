@@ -28,21 +28,27 @@ export function makeCanvas(w, h) {
   return { canvas, g: canvas.getContext('2d') };
 }
 
-export function canvasTexture(w, h, draw, { repeat = false, srgb = true, aniso = 4 } = {}) {
+export function canvasTexture(w, h, draw, { repeat = false, srgb = true, aniso = 16 } = {}) {
   const { canvas, g } = makeCanvas(w, h);
   draw(g, w, h);
   const tex = new THREE.CanvasTexture(canvas);
   if (repeat) tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = aniso;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   return tex;
 }
 
 function noise(g, w, h, r, count, alpha, colors) {
+  // Soft, velvety multi-pixel micro-texture that avoids harsh single-pixel sparkling
+  const nColors = colors.length;
   for (let i = 0; i < count; i++) {
-    g.fillStyle = colors[(r() * colors.length) | 0];
-    g.globalAlpha = alpha * r();
-    g.fillRect(r() * w, r() * h, 1 + r() * 2, 1 + r() * 2);
+    g.fillStyle = colors[(r() * nColors) | 0];
+    g.globalAlpha = alpha * 0.35 * r();
+    const size = 2 + r() * 4;
+    g.fillRect(r() * w, r() * h, size, size);
   }
   g.globalAlpha = 1;
 }
@@ -56,69 +62,73 @@ const texFactories = {
       g.fillStyle = `rgb(${base + 30}, ${base - 6}, ${base - 38})`;
       g.fillRect(i * pw, 0, pw, h);
       for (let k = 0; k < 40; k++) {
-        g.strokeStyle = `rgba(40,22,10,${0.05 + r() * 0.1})`;
+        g.strokeStyle = `rgba(40,22,10,${0.04 + r() * 0.08})`;
         g.lineWidth = 1 + r() * 2;
         g.beginPath();
         const x = i * pw + r() * pw;
         g.moveTo(x, 0); g.bezierCurveTo(x + (r() - 0.5) * 14, h * 0.3, x + (r() - 0.5) * 14, h * 0.7, x + (r() - 0.5) * 10, h);
         g.stroke();
       }
-      g.fillStyle = 'rgba(20,10,4,0.55)'; g.fillRect(i * pw, 0, 2, h);
-      const cut = r() * h; g.fillRect(i * pw, cut, pw, 2);
+      g.fillStyle = 'rgba(20,10,4,0.45)'; g.fillRect(i * pw, 0, 1.5, h);
+      const cut = r() * h; g.fillRect(i * pw, cut, pw, 1.5);
     }
   }, { repeat: true }),
 
   marble: () => canvasTexture(1024, 1024, (g, w, h) => {
     const r = rng(23);
-    g.fillStyle = '#e6e3dc'; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 26; i++) {
-      g.strokeStyle = `rgba(90,96,108,${0.06 + r() * 0.16})`;
-      g.lineWidth = 0.6 + r() * 2.4;
+    g.fillStyle = '#f3f1ec'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 24; i++) {
+      g.strokeStyle = `rgba(100,108,120,${0.04 + r() * 0.12})`;
+      g.lineWidth = 0.8 + r() * 2.2;
       g.beginPath();
       let x = r() * w, y = 0; g.moveTo(x, y);
       while (y < h) { x += (r() - 0.5) * 70; y += 40 + r() * 60; g.lineTo(x, y); }
       g.stroke();
     }
-    noise(g, w, h, r, 2500, 0.08, ['#fff', '#9aa']);
+    noise(g, w, h, r, 600, 0.04, ['#ffffff', '#cbd5e1']);
   }, { repeat: true }),
 
   plaster: () => canvasTexture(512, 512, (g, w, h) => {
     const r = rng(5);
-    g.fillStyle = '#d6d0c4'; g.fillRect(0, 0, w, h);
-    noise(g, w, h, r, 9000, 0.12, ['#fff', '#8d887c', '#c1baab']);
+    g.fillStyle = '#f4f2ec'; g.fillRect(0, 0, w, h);
+    const grd = g.createLinearGradient(0, 0, w, h);
+    grd.addColorStop(0, 'rgba(255,255,255,0.05)');
+    grd.addColorStop(1, 'rgba(0,0,0,0.02)');
+    g.fillStyle = grd; g.fillRect(0, 0, w, h);
+    noise(g, w, h, r, 800, 0.04, ['#ffffff', '#e2e0d8']);
   }, { repeat: true }),
 
   graphite: () => canvasTexture(512, 512, (g, w, h) => {
     const r = rng(7);
     g.fillStyle = '#2a2e35'; g.fillRect(0, 0, w, h);
-    noise(g, w, h, r, 9000, 0.2, ['#000', '#4b525c', '#3a3f48']);
+    noise(g, w, h, r, 1200, 0.08, ['#1a1c20', '#3e434d', '#4b525c']);
   }, { repeat: true }),
 
   ink: () => canvasTexture(512, 512, (g, w, h) => {
     const r = rng(31);
     g.fillStyle = '#141a26'; g.fillRect(0, 0, w, h);
-    noise(g, w, h, r, 7000, 0.2, ['#000', '#2a3550', '#1e2740']);
+    noise(g, w, h, r, 1000, 0.08, ['#0d111a', '#242c3d']);
     g.strokeStyle = 'rgba(255,179,64,0.07)'; g.lineWidth = 1;
     for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(i * w / 8, 0); g.lineTo(i * w / 8, h); g.stroke(); g.beginPath(); g.moveTo(0, i * h / 8); g.lineTo(w, i * h / 8); g.stroke(); }
   }, { repeat: true }),
 
   rubber: () => canvasTexture(512, 512, (g, w, h) => {
     const r = rng(41);
-    g.fillStyle = '#1d1f23'; g.fillRect(0, 0, w, h);
-    noise(g, w, h, r, 12000, 0.35, ['#000', '#383b42', '#4a4e57']);
+    g.fillStyle = '#1e2126'; g.fillRect(0, 0, w, h);
+    noise(g, w, h, r, 1000, 0.1, ['#14161a', '#323740']);
   }, { repeat: true }),
 
   carpet: () => canvasTexture(512, 512, (g, w, h) => {
     const r = rng(53);
     g.fillStyle = '#2c3340'; g.fillRect(0, 0, w, h);
-    noise(g, w, h, r, 16000, 0.3, ['#1d222c', '#3b4454', '#252b37']);
+    noise(g, w, h, r, 1500, 0.1, ['#212630', '#384152']);
   }, { repeat: true }),
 
   tile: () => canvasTexture(512, 512, (g, w, h) => {
     const r = rng(61);
-    g.fillStyle = '#c9c6bf'; g.fillRect(0, 0, w, h);
-    noise(g, w, h, r, 5000, 0.1, ['#fff', '#888']);
-    g.strokeStyle = 'rgba(40,40,44,0.5)'; g.lineWidth = 3;
+    g.fillStyle = '#dedcd6'; g.fillRect(0, 0, w, h);
+    noise(g, w, h, r, 400, 0.03, ['#ffffff', '#c5c2bb']);
+    g.strokeStyle = 'rgba(60,64,72,0.4)'; g.lineWidth = 2.5;
     g.strokeRect(0, 0, w, h);
     g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w / 2, h); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
   }, { repeat: true }),

@@ -68,7 +68,7 @@ class ContentController extends Controller
                 'max' => ContentSanitizer::MAX,
                 'customised' => $this->store->isCustomised(),
                 'game_url' => route('game'),
-                'cv_url' => route('cv'),
+                'cv_url' => route('game'),
             ],
         ];
     }

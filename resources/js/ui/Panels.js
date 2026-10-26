@@ -18,11 +18,11 @@ export class Panel {
     this.tags = $('panel-tags');
     this.body = $('panel-body');
     this.restore = null;
-    $('panel-close').addEventListener('click', () => this.close());
-    this.root.addEventListener('keydown', (e) => this.trap(e));
+    $('panel-close')?.addEventListener('click', () => this.close());
+    this.root?.addEventListener('keydown', (e) => this.trap(e));
   }
 
-  get isOpen() { return !this.root.hidden; }
+  get isOpen() { return !!this.root && !this.root.hidden; }
 
   trap(e) {
     if (e.key !== 'Tab') return;

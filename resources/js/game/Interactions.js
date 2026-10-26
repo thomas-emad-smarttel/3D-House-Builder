@@ -10,6 +10,7 @@ export class Interactions {
     this.current = null;
     this.cardTarget = null;
     this.highlighted = new Set();
+    this.lastPromptLabel = null;
   }
 
   update(player, world) {
@@ -33,9 +34,16 @@ export class Interactions {
       }
     }
 
-    if (best !== this.current) {
+    const getLabel = (it) => {
+      if (!it) return null;
+      return typeof it.label === 'function' ? it.label() : it.label;
+    };
+
+    const nextLabel = getLabel(best);
+    if (best !== this.current || nextLabel !== this.lastPromptLabel) {
       this.current = best;
-      this.hud.setPrompt(best ? best.label : null);
+      this.lastPromptLabel = nextLabel;
+      this.hud.setPrompt(nextLabel);
     }
     if (card !== this.cardTarget) {
       this.cardTarget = card;
@@ -50,13 +58,21 @@ export class Interactions {
 
   trigger() {
     const it = this.current;
-    if (it && (!it.enabled || it.enabled())) it.action?.();
+    if (it && (!it.enabled || it.enabled())) {
+      it.action?.();
+      const updated = typeof it.label === 'function' ? it.label() : it.label;
+      if (updated !== this.lastPromptLabel) {
+        this.lastPromptLabel = updated;
+        this.hud.setPrompt(updated);
+      }
+    }
   }
 
   clear() {
     for (const it of this.highlighted) it.onFocus?.(false);
     this.highlighted.clear();
     this.current = null; this.cardTarget = null;
+    this.lastPromptLabel = null;
     this.hud.setPrompt(null); this.hud.setCard(null);
   }
 }

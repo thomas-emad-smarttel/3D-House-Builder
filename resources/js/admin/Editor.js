@@ -1,138 +1,171 @@
 import { el } from '../ui/dom.js';
 import { api } from './api.js';
 import { makeFields } from './fields.js';
-import { pkey, setIn } from './util.js';
-import { ownerSection, profileSection, skillsSection, timelineSection, contactSection, settingsSection } from './sections.js';
-import { roomsSection, newCustomRoom } from './rooms.js';
+import { setIn } from './util.js';
+import { HouseBuilder3D } from './HouseBuilder3D.js';
+import {
+  projectsSection,
+  house3DSection,
+  specsSection,
+  floorsSection,
+  roomsSection,
+  doorsAndWindowsSection,
+} from './houseSections.js';
 import { designerSection } from './designer/Designer.js';
-import { mediaSection, historySection } from './library.js';
+import { mediaSection } from './library.js';
 import { objectLibrarySection } from './library/objectLibrarySection.js';
 import { syncLibrary } from '../scenes/custom/library.js';
 
 const SECTIONS = [
-  { id: 'owner', label: 'Site and owner', render: ownerSection, prefixes: ['owner'] },
-  { id: 'profile', label: 'Profile', render: profileSection, prefixes: ['profile'] },
-  { id: 'skills', label: 'Skills', render: skillsSection, prefixes: ['skills'] },
-  { id: 'timeline', label: 'Career timeline', render: timelineSection, prefixes: ['timeline'] },
-  { id: 'contact', label: 'Contact and CV', render: contactSection, prefixes: ['contact', 'cv_file'] },
-  { id: 'rooms', label: 'Rooms and projects', render: roomsSection, prefixes: ['rooms'] },
-  { id: 'designer', label: 'Room designer', render: designerSection, prefixes: [] },
-  { id: 'library', label: 'Object library', render: objectLibrarySection, prefixes: [] },
-  { id: 'settings', label: 'Game settings', render: settingsSection, prefixes: ['settings'] },
-  { id: 'media', label: 'Media library', render: mediaSection, prefixes: [] },
-  { id: 'history', label: 'History and reset', render: historySection, prefixes: [] },
+  {
+    id: 'builder3d',
+    label: '🏗️ 3D House Builder',
+    render: (ed) => {
+      if (ed.active3DBuilder) {
+        ed.active3DBuilder.dispose();
+      }
+      ed.active3DBuilder = new HouseBuilder3D(ed);
+      return ed.active3DBuilder.render();
+    },
+    prefixes: ['floors'],
+  },
+  { id: 'projects', label: '🏠 House Projects', render: projectsSection, prefixes: [] },
+  { id: 'specs', label: '📐 House Specs & Plot', render: specsSection, prefixes: ['title', 'plot_width', 'plot_depth'] },
+  { id: 'floors', label: '🏢 Floors & Levels', render: floorsSection, prefixes: ['floors'] },
+  { id: 'rooms', label: '🛋️ Rooms & Ceilings', render: roomsSection, prefixes: ['floors'] },
+  { id: 'doors', label: '🚪 Doors & Windows', render: doorsAndWindowsSection, prefixes: ['floors'] },
+  { id: 'designer', label: '✏️ Room Designer (3D & 2D)', render: designerSection, prefixes: [] },
+  { id: 'viewer3d', label: '🎮 Live 3D House Tour', render: house3DSection, prefixes: [] },
+  { id: 'library', label: '📚 3D Object Library', render: objectLibrarySection, prefixes: [] },
+  { id: 'media', label: '🖼️ Media Library', render: mediaSection, prefixes: [] },
 ];
 
-const clone = (v) => JSON.parse(JSON.stringify(v));
-
-/** null -> '' so inputs behave; `overview` stays null when a room has none. */
-function hydrate(content) {
-  const walk = (v, key) => {
-    if (Array.isArray(v)) return v.map((x) => walk(x));
-    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x, k)]));
-    return v === null && key !== 'overview' && key !== 'layout' ? '' : v;
-  };
-  const c = walk(clone(content));
-  for (const room of c.rooms ?? []) {
-    for (const m of [room.overview, ...(room.modules ?? [])]) {
-      if (!m) continue;
-      m.features = (m.features ?? []).map((f) => (typeof f === 'string' ? { name: f, status: '' } : { name: f.name ?? '', status: f.status ?? '' }));
-    }
-  }
-  return c;
-}
-
-/** Drops editor-only keys (leading underscore). The server sanitises everything else. */
-function serialize(state) {
-  const walk = (v) => {
-    if (Array.isArray(v)) return v.map(walk);
-    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).filter(([k]) => !k.startsWith('_')).map(([k, x]) => [k, walk(x)]));
-    return v;
-  };
-  return walk(state);
-}
-
 export class Editor {
-  constructor(root, urls = {}) {
+  constructor(root) {
     this.root = root;
-    this.urls = { content: '/admin/content', media: '/admin/media', revisions: '/admin/revisions', reset: '/admin/content/reset', ...urls };
-    this.state = null; this.meta = null;
-    this.errors = {}; this.dirty = false; this.saving = false;
-    this.section = 'owner';
-    this.openSet = new Set();
+    this.house = null;
+    this.allHouses = [];
+    this.currentHouseId = null;
+    this.state = null;
+    this.meta = null;
+    this.errors = {};
+    this.dirty = false;
+    this.saving = false;
+    this.section = 'builder3d'; // Default to 3D House Builder!
+    this.selectedFloorIdx = 0;
+    this.selectedRoomIdx = 0;
     this.libCache = null;
     this.f = null;
-    this.designIndex = -1;
+    this.designIndex = 0;
     this.designers = new Map();
+    this.active3DBuilder = null;
   }
 
   async init() {
-    this.root.replaceChildren(el('p', { class: 'loading', text: 'Loading your content…' }));
+    this.root.replaceChildren(el('p', { class: 'loading', text: 'Loading House Builder…' }));
     try {
-      const data = await api('GET', this.urls.content);
-      this.meta = data.meta; this.state = hydrate(data.content);
-      if (Array.isArray(data.library)) syncLibrary(data.library);
+      await this.loadHousesList();
+      const firstId = this.allHouses[0]?.id;
+      if (firstId) {
+        await this.loadHouse(firstId);
+      }
     } catch (e) {
       this.root.replaceChildren(el('p', { class: 'error', role: 'alert', text: e.message }));
       return;
     }
+
     this.buildShell();
     this.render();
     window.addEventListener('beforeunload', (e) => { if (this.dirty) { e.preventDefault(); e.returnValue = ''; } });
     window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); this.save(); } });
   }
 
+  async loadHousesList() {
+    const data = await api('GET', '/admin/houses');
+    this.allHouses = data.houses || [];
+    if (Array.isArray(data.library)) syncLibrary(data.library);
+  }
+
+  async loadHouse(id) {
+    const data = await api('GET', `/admin/houses/${id}`);
+    this.house = data.house;
+    this.currentHouseId = data.house.id;
+    this.state = this.house;
+    this.meta = data.meta || {};
+    this.selectedFloorIdx = 0;
+    this.selectedRoomIdx = 0;
+    this.designers.clear();
+    this.dirty = false;
+    if (Array.isArray(data.library)) syncLibrary(data.library);
+  }
+
+  async switchHouse(id) {
+    if (this.dirty && !confirm('You have unsaved changes. Discard and switch house project?')) return;
+    this.root.replaceChildren(el('p', { class: 'loading', text: 'Switching house project…' }));
+    await this.loadHouse(id);
+    await this.loadHousesList();
+    this.buildShell();
+    this.render();
+  }
+
   /* ------------------------------------------------------------ state */
-  set(path, value) { setIn(this.state, path, value); this.markDirty(); }
+  set(path, value) {
+    setIn(this.state, path, value);
+    this.markDirty();
+  }
 
   markDirty() {
-    if (!this.dirty) { this.dirty = true; this.updateStatus(); }
+    if (!this.dirty) {
+      this.dirty = true;
+      this.updateStatus();
+    }
   }
 
   hasErrorUnder(prefix) {
     return Object.keys(this.errors).some((k) => k === prefix || k.startsWith(`${prefix}.`));
   }
 
-  serialize() { return serialize(this.state); }
-
-  newCustomRoom() { return newCustomRoom(this.state.rooms); }
-
-  async replaceContent(data) {
-    this.meta = data.meta; this.state = hydrate(data.content);
-    if (Array.isArray(data.library)) syncLibrary(data.library);
-    this.errors = {}; this.dirty = false; this.openSet.clear(); this.designers.clear();
-    this.updateStatus(); this.render();
-  }
-
   /* ------------------------------------------------------------- save */
   async save() {
-    if (this.saving) return;
-    this.saving = true; this.updateStatus();
+    if (this.saving || !this.house) return;
+    this.saving = true;
+    this.updateStatus();
     try {
-      const res = await api('PUT', this.urls.content, { content: this.serialize() });
-      this.meta = res.meta; this.state = hydrate(res.content);
-      this.errors = {}; this.dirty = false;
-      this.toast('Saved. Reload the game tab to see the changes.');
+      const payload = {
+        title: this.house.title,
+        description: this.house.description,
+        status: this.house.status,
+        plot_width: this.house.plot_width,
+        plot_depth: this.house.plot_depth,
+        environment: this.house.environment,
+        floors: this.house.floors,
+      };
+
+      const res = await api('PUT', `/admin/houses/${this.house.id}`, payload);
+      this.house = res.house;
+      this.state = this.house;
+      this.errors = {};
+      this.dirty = false;
+      await this.loadHousesList();
+      this.toast('House saved! Reload 3D view to see changes.');
     } catch (e) {
       if (e.status === 422 && e.data?.errors) {
         this.errors = e.data.errors;
-        const first = Object.keys(this.errors)[0];
-        const layoutErr = Object.keys(this.errors).find((k) => /^rooms\.\d+\.layout/.test(k));
-        const target = SECTIONS.find((s) => s.prefixes.some((p) => first === p || first.startsWith(`${p}.`)));
-        if (layoutErr && (/^rooms\.\d+\.layout/.test(first) || !target)) {
-          this.section = 'designer'; this.designIndex = Number(layoutErr.split('.')[1]);
-        } else if (target) this.section = target.id;
         this.toast(`${Object.keys(this.errors).length} field(s) need attention`, 'bad');
-      } else this.toast(e.message, 'bad');
+      } else {
+        this.toast(e.message, 'bad');
+      }
     } finally {
-      this.saving = false; this.updateStatus(); this.render({ scrollToError: true });
+      this.saving = false;
+      this.updateStatus();
+      this.render();
     }
   }
 
   /* ------------------------------------------------------------ media */
   async library(force = false) {
     if (!force && this.libCache) return this.libCache;
-    const { files } = await api('GET', this.urls.media);
+    const { files } = await api('GET', '/admin/media');
     this.libCache = files;
     return files;
   }
@@ -141,7 +174,7 @@ export class Editor {
     const body = new FormData();
     files.forEach((f) => body.append('files[]', f));
     try {
-      const res = await api('POST', this.urls.media, body);
+      const res = await api('POST', '/admin/media', body);
       this.libCache = null;
       this.toast(`Uploaded ${res.files.length} file(s)`);
       return res.files;
@@ -160,13 +193,26 @@ export class Editor {
     this.mainEl = el('main', { class: 'main', id: 'main' });
     this.toastEl = el('div', { class: 'toast', role: 'status', 'aria-live': 'polite', hidden: true });
     const logout = document.getElementById('logout-form');
+
+    const houseSwitcher = el('select', {
+      class: 'input',
+      style: { maxWidth: '240px', padding: '4px 8px', fontSize: '0.88rem' },
+      onchange: (e) => this.switchHouse(Number(e.target.value)),
+    },
+      ...this.allHouses.map((h) => el('option', { value: String(h.id), selected: h.id === this.currentHouseId, text: h.title })),
+    );
+
+    const view3dUrl = this.house?.slug ? `/house/${this.house.slug}` : '/';
+
     this.root.replaceChildren(
       el('header', { class: 'topbar' },
-        el('strong', { class: 'brand', text: 'Portfolio dashboard' }),
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+          el('strong', { class: 'brand', text: '🏠 3D House Builder' }),
+          this.allHouses.length > 1 ? houseSwitcher : null,
+        ),
         this.statusEl,
         el('span', { class: 'topbar-actions' },
-          el('a', { class: 'btn', href: this.meta.game_url, target: '_blank', rel: 'noopener', text: 'Open the game ↗' }),
-          el('a', { class: 'btn', href: this.meta.cv_url, target: '_blank', rel: 'noopener', text: 'Open the CV ↗' }),
+          el('a', { class: 'btn', href: view3dUrl, target: '_blank', rel: 'noopener', text: 'Open 3D House ↗' }),
           this.saveBtn,
           logout ? el('button', { type: 'button', class: 'btn', onclick: () => logout.submit() }, 'Log out') : null)),
       el('div', { class: 'layout' }, this.navEl, this.mainEl),
@@ -194,19 +240,32 @@ export class Editor {
     this.navEl.replaceChildren(...SECTIONS.map((s) => {
       const n = Object.keys(this.errors).filter((k) => s.prefixes.some((p) => k === p || k.startsWith(`${p}.`))).length;
       return el('button', {
-        type: 'button', class: `nav-item${s.id === this.section ? ' active' : ''}`, 'aria-current': s.id === this.section ? 'page' : null,
-        onclick: () => { this.section = s.id; this.render(); },
+        type: 'button',
+        class: `nav-item${s.id === this.section ? ' active' : ''}`,
+        'aria-current': s.id === this.section ? 'page' : null,
+        onclick: () => {
+          this.section = s.id;
+          this.render();
+        },
       }, s.label, n ? el('span', { class: 'badge-err', text: String(n) }) : null);
     }));
   }
 
   render({ focusKey, scrollToError } = {}) {
     if (!this.state) return;
+    if (this.section !== 'builder3d' && this.active3DBuilder) {
+      this.active3DBuilder.dispose();
+      this.active3DBuilder = null;
+    }
     const scroll = this.mainEl.scrollTop;
     this.f = makeFields(this);
     this.renderNav();
     const s = SECTIONS.find((x) => x.id === this.section);
-    this.mainEl.replaceChildren(el('h1', { text: s.label }), ...[].concat(s.render(this, this.f)).filter(Boolean));
+    if (s.id === 'builder3d') {
+      this.mainEl.replaceChildren(...[].concat(s.render(this, this.f)).filter(Boolean));
+    } else {
+      this.mainEl.replaceChildren(el('h1', { text: s.label }), ...[].concat(s.render(this, this.f)).filter(Boolean));
+    }
     this.mainEl.scrollTop = scroll;
     if (focusKey) this.mainEl.querySelector(`.strings[data-key="${focusKey}"] .string-row:last-child input`)?.focus();
     if (scrollToError) this.mainEl.querySelector('.has-error input, .has-error textarea, .has-error select, .error')?.scrollIntoView?.({ block: 'center' });

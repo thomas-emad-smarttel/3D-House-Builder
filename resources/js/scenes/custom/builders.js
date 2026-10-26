@@ -82,40 +82,45 @@ function loadObjTemplate(filePath, mtlPath) {
 
 export const BUILDERS = {
   block(world, room, o) {
-    const p = o.p;
-    world.box({ x: o.x, y: p.y, z: o.z, w: p.w, h: p.h, d: p.d, rotY: RADIANS(o.rot), material: matFor(p.material, p.color), collide: !!p.collide && p.y < 2.2, cast: p.material !== 'glass' });
+    const p = o.p || {};
+    world.box({ x: o.x, y: (o.y ?? 0) + (p.y ?? 0), z: o.z, w: p.w || 2, h: p.h || 1.2, d: p.d || 0.4, rotY: RADIANS(o.rot), material: matFor(p.material || 'solid', p.color || '#3b4452'), collide: !!p.collide && (p.y ?? 0) < 2.2, cast: p.material !== 'glass' });
   },
 
   cylinder(world, room, o) {
-    const p = o.p;
-    world.cylinder({ x: o.x, y: p.y, z: o.z, r: p.r, h: p.h, material: matFor(p.material, p.color), collide: !!p.collide && p.y < 2.2, seg: 32 });
+    const p = o.p || {};
+    world.cylinder({ x: o.x, y: (o.y ?? 0) + (p.y ?? 0), z: o.z, r: p.r || 0.4, h: p.h || 3, material: matFor(p.material || 'graphite', p.color || '#3b4452'), collide: !!p.collide && (p.y ?? 0) < 2.2, seg: 32 });
   },
 
   rug(world, room, o) {
-    const p = o.p;
-    world.box({ x: o.x, y: 0.012, z: o.z, w: p.w, h: 0.02, d: p.d, rotY: RADIANS(o.rot), material: matFor(p.material, p.color), cast: false, tile: 2.5 });
+    const p = o.p || {};
+    world.box({ x: o.x, y: (o.y ?? 0) + 0.012, z: o.z, w: p.w || 4, h: 0.02, d: p.d || 3, rotY: RADIANS(o.rot), material: matFor(p.material || 'solid', p.color || '#2c3340'), cast: false, tile: 2.5 });
   },
 
-  desk(world, room, o) { desk(world, { x: o.x, z: o.z, rotY: RADIANS(o.rot), w: o.p.w, d: o.p.d, top: matFor(o.p.material, '#a07a52') }); },
+  desk(world, room, o) {
+    const p = o.p || {};
+    desk(world, { x: o.x, y: o.y ?? 0, z: o.z, rotY: RADIANS(o.rot), w: p.w || 1.8, d: p.d || 0.8, top: matFor(p.material || 'wood', '#a07a52') });
+  },
 
   workstation(world, room, o) {
-    const p = o.p; const rotY = RADIANS(o.rot);
-    desk(world, { x: o.x, z: o.z, rotY, w: p.w, d: 0.9, top: M.wood() });
-    const n = Math.max(1, Math.min(3, p.monitors));
+    const p = o.p || {}; const rotY = RADIANS(o.rot);
+    desk(world, { x: o.x, y: o.y ?? 0, z: o.z, rotY, w: p.w || 1.8, d: 0.9, top: M.wood() });
+    const n = Math.max(1, Math.min(3, p.monitors || 1));
     for (let i = 0; i < n; i++) {
       const c = at(o, (i - (n - 1) / 2) * 0.78, 0.05);
-      deskMonitor(world, { x: c.x, y: 0.76, z: c.z, rotY, accent: room.accent, w: 0.72, h: 0.42 });
+      deskMonitor(world, { x: c.x, y: (o.y ?? 0) + 0.76, z: c.z, rotY, accent: room.accent || '#3b82f6', w: 0.72, h: 0.42 });
     }
     const c = at(o, 0, 0.95);
-    chair(world, { x: c.x, z: c.z, rotY });
+    chair(world, { x: c.x, y: o.y ?? 0, z: c.z, rotY });
   },
 
-  chair(world, room, o) { chair(world, { x: o.x, z: o.z, rotY: RADIANS(o.rot), color: o.p.color }); },
-  sofa(world, room, o) { sofa(world, { x: o.x, z: o.z, rotY: RADIANS(o.rot), w: o.p.w, color: o.p.color }); },
-  table(world, room, o) { table(world, { x: o.x, z: o.z, rotY: RADIANS(o.rot), w: o.p.w, d: o.p.d, top: matFor(o.p.material, '#cbd5e1') }); },
-  plant(world, room, o) { plant(world, { x: o.x, z: o.z, s: o.p.s }); },
-  bookshelf(world, room, o) { bookshelf(world, { x: o.x, z: o.z, rotY: RADIANS(o.rot), w: o.p.w, h: o.p.h, accent: room.accent }); },
-  lamp(world, room, o) { floorLamp(world, { x: o.x, z: o.z, color: o.p.color }); },
+  chair(world, room, o) { const p = o.p || {}; chair(world, { x: o.x, y: o.y ?? 0, z: o.z, rotY: RADIANS(o.rot), color: p.color || '#2b3038' }); },
+  sofa(world, room, o) { const p = o.p || {}; sofa(world, { x: o.x, y: o.y ?? 0, z: o.z, rotY: RADIANS(o.rot), w: p.w || 2.2, color: p.color || '#3b4452' }); },
+  table(world, room, o) { const p = o.p || {}; table(world, { x: o.x, y: o.y ?? 0, z: o.z, rotY: RADIANS(o.rot), w: p.w || 1.2, d: p.d || 0.7, top: matFor(p.material || 'marble', '#cbd5e1') }); },
+  plant(world, room, o) { const p = o.p || {}; plant(world, { x: o.x, y: o.y ?? 0, z: o.z, s: p.s || 1 }); },
+  bookshelf(world, room, o) { const p = o.p || {}; bookshelf(world, { x: o.x, y: o.y ?? 0, z: o.z, rotY: RADIANS(o.rot), w: p.w || 2, h: p.h || 2.2, accent: room.accent || '#3b82f6' }); },
+  lamp(world, room, o) { const p = o.p || {}; floorLamp(world, { x: o.x, y: o.y ?? 0, z: o.z, color: p.color || '#ffd9a0' }); },
+  floorLamp(world, room, o) { const p = o.p || {}; floorLamp(world, { x: o.x, y: o.y ?? 0, z: o.z, color: p.color || '#ffd9a0' }); },
+  deskMonitor(world, room, o) { deskMonitor(world, { x: o.x, y: (o.y ?? 0) + 0.1, z: o.z, rotY: RADIANS(o.rot), accent: room.accent || '#3b82f6' }); },
 
   module(world, room, o) {
     const mod = room.modules.find((m) => m.id === o.p.module);

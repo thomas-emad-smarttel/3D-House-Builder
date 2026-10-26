@@ -15,7 +15,7 @@ export const SETTINGS = {
     facing: 0.35,          // cosine of the max angle between view and target
   },
   render: {
-    maxPixelRatio: 1.75,
+    maxPixelRatio: 2.0,
     shadows: true,
     exposure: 1.15,
   },

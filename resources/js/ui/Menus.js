@@ -9,14 +9,14 @@ export class Menus {
     this.pause = $('pause');
     this.restore = null;
 
-    $('btn-start').addEventListener('click', () => onStart({ skip: $('chk-skip').checked }));
-    $('btn-controls').addEventListener('click', () => this.openControls());
-    $('controls-close').addEventListener('click', () => this.closeControls());
-    $('pause-controls').addEventListener('click', () => this.openControls());
-    $('pause-resume').addEventListener('click', () => onResume());
+    $('btn-start')?.addEventListener('click', () => onStart({ skip: $('chk-skip')?.checked || false }));
+    $('btn-controls')?.addEventListener('click', () => this.openControls());
+    $('controls-close')?.addEventListener('click', () => this.closeControls());
+    $('pause-controls')?.addEventListener('click', () => this.openControls());
+    $('pause-resume')?.addEventListener('click', () => onResume());
     this.onTravel = onTravel;
 
-    const soundBtns = [$('btn-sound'), $('pause-sound'), $('hud-sound')];
+    const soundBtns = [$('btn-sound'), $('pause-sound'), $('hud-sound')].filter(Boolean);
     soundBtns.forEach((b) => b.addEventListener('click', () => { audio.toggle(); audio.ui(); }));
     audio.onChange((on) => {
       soundBtns.forEach((b) => {
@@ -27,21 +27,22 @@ export class Menus {
 
     this.buildRoomList();
     progress.onChange(() => this.buildRoomList());
-    for (const modal of [this.controls, this.pause]) {
+    for (const modal of [this.controls, this.pause].filter(Boolean)) {
       modal.addEventListener('keydown', (e) => this.trap(e, modal));
     }
   }
 
   buildRoomList() {
     const list = $('pause-rooms');
+    if (!list) return;
     list.replaceChildren(
       el('li', {}, el('button', { class: 'room-item', type: 'button', onclick: () => this.onTravel('hub') },
-        el('span', { class: 'room-dot', style: { background: '#d9a85f' } }), 'The Mansion entrance')),
+        el('span', { class: 'room-dot', style: { background: '#3b82f6' } }), 'House View')),
       ...this.data.rooms.map((r) => el('li', {},
         el('button', { class: 'room-item', type: 'button', onclick: () => this.onTravel(r.id) },
-          el('span', { class: 'room-dot', style: { background: r.accent } }),
+          el('span', { class: 'room-dot', style: { background: r.accent || '#3b82f6' } }),
           el('span', { class: 'room-name', text: r.name }),
-          this.progress.hasRoom(r.id) ? el('span', { class: 'room-seen', text: 'Explored' }) : null))),
+          this.progress.hasRoom(r.id) ? el('span', { class: 'room-seen', text: 'Visited' }) : null))),
     );
   }
 

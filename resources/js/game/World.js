@@ -48,7 +48,7 @@ export class World {
     mesh.castShadow = cast;
     mesh.receiveShadow = receive;
     (parent ?? this.scene).add(mesh);
-    if (collide) mesh.userData.collider = this.collider(x, z, w, d, rotY);
+    if (collide) mesh.userData.collider = this.collider(x, z, w, d, rotY, y, y + h);
     return mesh;
   }
 
@@ -58,12 +58,12 @@ export class World {
     mesh.position.set(x, y + h / 2, z);
     mesh.castShadow = cast; mesh.receiveShadow = true;
     (parent ?? this.scene).add(mesh);
-    if (collide) mesh.userData.collider = this.collider(x, z, r * 1.8, r * 1.8);
+    if (collide) mesh.userData.collider = this.collider(x, z, r * 1.8, r * 1.8, 0, y, y + h);
     return mesh;
   }
 
-  collider(x, z, w, d, rotY = 0) {
-    const c = makeAabb(x, z, w, d, rotY);
+  collider(x, z, w, d, rotY = 0, minY = -Infinity, maxY = Infinity) {
+    const c = makeAabb(x, z, w, d, rotY, minY, maxY);
     this.colliders.push(c);
     return c;
   }

@@ -2,20 +2,26 @@
  * 2D collision on the floor plane: the player is a circle, obstacles are
  * axis-aligned boxes ({minX,maxX,minZ,maxZ,enabled}).
  */
-export function makeAabb(x, z, w, d, rotY = 0) {
+export function makeAabb(x, z, w, d, rotY = 0, minY = -Infinity, maxY = Infinity) {
   // Rooms only use quarter-turn rotations, so swapping w/d is exact.
   const swap = Math.abs(Math.sin(rotY)) > 0.5;
   const hw = (swap ? d : w) / 2;
   const hd = (swap ? w : d) / 2;
-  return { minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd, enabled: true };
+  return { minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd, minY, maxY, enabled: true };
 }
 
 export function resolveCollisions(p, radius, colliders, bounds) {
   if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) return;
+  const playerY = p.y || 0;
+
   for (let pass = 0; pass < 3; pass++) {
     let moved = false;
     for (const c of colliders) {
       if (c.enabled === false) continue;
+      // Multi-floor height check: ignore walls on other floors
+      if (c.minY !== undefined && c.maxY !== undefined) {
+        if (playerY + 1.7 <= c.minY || playerY >= c.maxY) continue;
+      }
       if (!Number.isFinite(c.minX) || !Number.isFinite(c.maxX) || !Number.isFinite(c.minZ) || !Number.isFinite(c.maxZ)) continue;
       const cx = Math.max(c.minX, Math.min(p.x, c.maxX));
       const cz = Math.max(c.minZ, Math.min(p.z, c.maxZ));
@@ -45,9 +51,12 @@ export function resolveCollisions(p, radius, colliders, bounds) {
 }
 
 /** True when a circle at (x,z) would touch an enabled collider. */
-export function blocked(x, z, radius, colliders) {
+export function blocked(x, z, radius, colliders, y = 0) {
   for (const c of colliders) {
     if (c.enabled === false) continue;
+    if (c.minY !== undefined && c.maxY !== undefined) {
+      if (y + 1.7 <= c.minY || y >= c.maxY) continue;
+    }
     if (!Number.isFinite(c.minX) || !Number.isFinite(c.maxX) || !Number.isFinite(c.minZ) || !Number.isFinite(c.maxZ)) continue;
     const cx = Math.max(c.minX, Math.min(x, c.maxX));
     const cz = Math.max(c.minZ, Math.min(z, c.maxZ));

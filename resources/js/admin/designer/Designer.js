@@ -2,6 +2,7 @@ import { el } from '../../ui/dom.js';
 import { makeFields } from '../fields.js';
 import catalog, { typeDef, footprint, defaultParams, newLayout, newObject, snapToWall, optionsOf, ROTATIONS } from '../../scenes/custom/catalog.js';
 import { analyze, objectLabel, overlaps } from './analysis.js';
+import { Designer3D } from './Designer3D.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const S = 40;      // pixels per metre on the plan
@@ -39,10 +40,19 @@ export class Designer {
     this.last = null;
     this.baselineTaken = false;
     this.nudgeAt = 0;
+    this.viewMode = '3d'; // Default to 3D View!
+    this.designer3d = null;
   }
 
-  get room() { return this.ed.state.rooms[this.ri]; }
-  get layout() { return this.room.layout; }
+  get room() {
+    const floors = this.ed.house?.floors || this.ed.state?.floors || [];
+    const fl = floors[this.ed.selectedFloorIdx || 0] || floors[0];
+    if (fl && Array.isArray(fl.rooms)) {
+      return fl.rooms[this.ri] || fl.rooms[this.ed.selectedRoomIdx || 0] || fl.rooms[0] || null;
+    }
+    return this.ed.state?.rooms?.[this.ri] || null;
+  }
+  get layout() { return this.room?.layout || newLayout(); }
   objectIndex(id) { return this.layout.objects.findIndex((o) => o.id === id); }
   sel() { return this.layout.objects.find((o) => o.id === this.selected) ?? null; }
 
@@ -67,17 +77,44 @@ export class Designer {
     walk.checked = this.showWalk;
     walk.addEventListener('change', () => { this.showWalk = walk.checked; this.refreshAnalysis(); });
 
+    this.mode3dBtn = el('button', {
+      type: 'button',
+      class: `btn btn-small${this.viewMode === '3d' ? ' btn-primary' : ''}`,
+      text: '🎮 3D View',
+      onclick: () => this.switchViewMode('3d'),
+    });
+    this.mode2dBtn = el('button', {
+      type: 'button',
+      class: `btn btn-small${this.viewMode === '2d' ? ' btn-primary' : ''}`,
+      text: '📐 2D Plan',
+      onclick: () => this.switchViewMode('2d'),
+    });
+
+    const modeToggle = el('div', {
+      class: 'btn-group',
+      style: { display: 'flex', gap: '4px', background: '#1e293b', padding: '3px', borderRadius: '6px' },
+    }, this.mode3dBtn, this.mode2dBtn);
+
+    this.planWrap = el('div', {
+      class: 'plan-wrap',
+      style: {
+        position: 'relative',
+        width: '100%',
+        minHeight: '520px',
+        display: 'flex',
+        flexDirection: 'column',
+      },
+    }, this.svg);
+
     this.root = el('div', { class: 'designer' },
       el('div', { class: 'designer-toolbar' },
+        modeToggle,
         this.undoBtn, this.redoBtn,
-        el('label', { class: 'toggle', for: 'walk-toggle' }, walk, el('span', { text: 'Show where visitors can walk' })),
-        el('button', { type: 'button', class: 'btn btn-small', onclick: () => this.autoPlaceModules() }, 'Add displays for all modules'),
-        el('button', { type: 'button', class: 'btn btn-small', onclick: () => { this.ed.openSet.add(`rooms.${this.ri}`); this.ed.section = 'rooms'; this.ed.render(); } }, 'Room name, colour and modules…'),
-        el('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: () => this.saveAndTest() }, 'Save and test in game ↗')),
+        el('button', { type: 'button', class: 'btn btn-small', onclick: () => { this.ed.section = 'rooms'; this.ed.render(); } }, 'Room & Finishes…'),
+        el('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: () => this.saveAndTest() }, 'Save and test in 3D ↗')),
       el('div', { class: 'designer-body' },
         this.paletteEl(),
-        el('div', { class: 'plan-wrap' }, this.svg,
-          el('p', { class: 'hint', text: 'Drag objects to move them. Wall items snap to walls. Alt = fine placement. ↑↓←→ nudge, R rotate, D duplicate, Delete remove, Ctrl+Z undo.' })),
+        this.planWrap,
         this.inspectorEl),
       this.issuesEl);
 
@@ -87,7 +124,38 @@ export class Designer {
     this.renderInspector();
     this.refreshAnalysis();
     this.updateToolbar();
+
+    if (this.viewMode === '3d') {
+      setTimeout(() => this.switchViewMode('3d'), 50);
+    }
+
     return this.root;
+  }
+
+  switchViewMode(mode) {
+    this.viewMode = mode;
+    this.mode3dBtn.classList.toggle('btn-primary', mode === '3d');
+    this.mode2dBtn.classList.toggle('btn-primary', mode === '2d');
+
+    if (mode === '3d') {
+      this.svg.style.display = 'none';
+      if (!this.designer3d) {
+        this.designer3d = new Designer3D(this);
+      }
+      this.planWrap.replaceChildren(this.designer3d.wrap);
+      this.designer3d.mount();
+      this.designer3d.rebuildScene();
+    } else {
+      if (this.designer3d) {
+        this.designer3d.dispose();
+      }
+      this.svg.style.display = 'block';
+      this.planWrap.replaceChildren(
+        this.svg,
+        el('p', { class: 'hint', text: 'Drag objects to move them. Wall items snap to walls. Alt = fine placement. ↑↓←→ nudge, R rotate, D duplicate, Delete remove, Ctrl+Z undo.' })
+      );
+      this.drawPlan();
+    }
   }
 
   paletteEl() {
@@ -189,6 +257,9 @@ export class Designer {
   Z(z) { return (z + this.layout.size.d / 2 + PAD) * S; }
 
   drawPlan() {
+    if (this.viewMode === '3d' && this.designer3d) {
+      this.designer3d.rebuildScene();
+    }
     const { w, d } = this.layout.size;
     this.vbW = (w + PAD * 2) * S; this.vbH = (d + PAD * 2) * S;
     this.svg.setAttribute('viewBox', `0 0 ${this.vbW} ${this.vbH}`);
@@ -212,12 +283,78 @@ export class Designer {
     const ordered = [...L.objects].sort((a, b) => (a.type === 'rug' ? 0 : 1) - (b.type === 'rug' ? 0 : 1));
     ordered.forEach((o) => { const g = this.objectG(o); this.gs.set(o.id, g); this.objLayer.append(g); });
 
-    this.svg.append(
-      svgEl('rect', { x: this.X(-w / 2), y: this.Z(-d / 2), width: w * S, height: d * S, class: 'plan-walls', fill: 'none' }),
-      svgEl('line', { x1: this.X(-1.34), x2: this.X(1.34), y1: this.Z(d / 2), y2: this.Z(d / 2), class: 'plan-door' }),
-      svgEl('text', { x: this.X(0), y: this.Z(d / 2) + 22, class: 'plan-label', 'text-anchor': 'middle' }, document.createTextNode('Entrance and exit')),
-      svgEl('circle', { cx: this.X(0), cy: this.Z(d / 2 - 2.4), r: 7, class: 'plan-spawn' }),
-      svgEl('text', { x: this.X(0) + 12, y: this.Z(d / 2 - 2.4) + 4, class: 'plan-label' }, document.createTextNode('You start here')));
+    // Perimeter walls
+    this.svg.append(svgEl('rect', { x: this.X(-w / 2), y: this.Z(-d / 2), width: w * S, height: d * S, class: 'plan-walls', fill: 'none' }));
+
+    // Architectural Doors on 2D Plan ("Build doorس")
+    for (const dr of (L.doors || [])) {
+      const dw = (Number(dr.width) || 1.0) * S;
+      const off = Number(dr.offset) || 0;
+      const wallKey = (dr.wall || 'south').toLowerCase();
+      let x1 = 0, y1 = 0, x2 = 0, y2 = 0, tx = 0, ty = 0;
+
+      if (wallKey === 'south') {
+        x1 = this.X(off - (dr.width || 1.0) / 2);
+        x2 = this.X(off + (dr.width || 1.0) / 2);
+        y1 = y2 = this.Z(d / 2);
+        tx = (x1 + x2) / 2; ty = y1 + 18;
+      } else if (wallKey === 'north') {
+        x1 = this.X(off - (dr.width || 1.0) / 2);
+        x2 = this.X(off + (dr.width || 1.0) / 2);
+        y1 = y2 = this.Z(-d / 2);
+        tx = (x1 + x2) / 2; ty = y1 - 10;
+      } else if (wallKey === 'east') {
+        x1 = x2 = this.X(w / 2);
+        y1 = this.Z(off - (dr.width || 1.0) / 2);
+        y2 = this.Z(off + (dr.width || 1.0) / 2);
+        tx = x1 + 14; ty = (y1 + y2) / 2;
+      } else {
+        x1 = x2 = this.X(-w / 2);
+        y1 = this.Z(off - (dr.width || 1.0) / 2);
+        y2 = this.Z(off + (dr.width || 1.0) / 2);
+        tx = x1 - 14; ty = (y1 + y2) / 2;
+      }
+
+      this.svg.append(
+        svgEl('line', { x1, y1, x2, y2, stroke: '#d9a85f', 'stroke-width': 6, 'stroke-linecap': 'square' }),
+        svgEl('text', { x: tx, y: ty, class: 'plan-label', 'text-anchor': 'middle', fill: '#d9a85f', 'font-size': '11px', 'font-weight': 'bold' }, document.createTextNode(`🚪 ${dr.label || 'Door'}`)),
+      );
+    }
+
+    // Architectural Windows on 2D Plan
+    for (const wn of (L.windows || [])) {
+      const off = Number(wn.offset) || 0;
+      const wallKey = (wn.wall || 'north').toLowerCase();
+      let x1 = 0, y1 = 0, x2 = 0, y2 = 0, tx = 0, ty = 0;
+
+      if (wallKey === 'south') {
+        x1 = this.X(off - (wn.width || 1.6) / 2);
+        x2 = this.X(off + (wn.width || 1.6) / 2);
+        y1 = y2 = this.Z(d / 2);
+        tx = (x1 + x2) / 2; ty = y1 + 16;
+      } else if (wallKey === 'north') {
+        x1 = this.X(off - (wn.width || 1.6) / 2);
+        x2 = this.X(off + (wn.width || 1.6) / 2);
+        y1 = y2 = this.Z(-d / 2);
+        tx = (x1 + x2) / 2; ty = y1 - 8;
+      } else if (wallKey === 'east') {
+        x1 = x2 = this.X(w / 2);
+        y1 = this.Z(off - (wn.width || 1.6) / 2);
+        y2 = this.Z(off + (wn.width || 1.6) / 2);
+        tx = x1 + 14; ty = (y1 + y2) / 2;
+      } else {
+        x1 = x2 = this.X(-w / 2);
+        y1 = this.Z(off - (wn.width || 1.6) / 2);
+        y2 = this.Z(off + (wn.width || 1.6) / 2);
+        tx = x1 - 14; ty = (y1 + y2) / 2;
+      }
+
+      this.svg.append(
+        svgEl('line', { x1, y1, x2, y2, stroke: '#38bdf8', 'stroke-width': 5 }),
+        svgEl('line', { x1, y1: y1 + 3, x2, y2: y2 + 3, stroke: '#ffffff', 'stroke-width': 1.5 }),
+        svgEl('text', { x: tx, y: ty, class: 'plan-label', 'text-anchor': 'middle', fill: '#38bdf8', 'font-size': '10px' }, document.createTextNode('🪟 Window')),
+      );
+    }
     this.applySelection();
     if (this.showWalk && this.last?.cells) this.drawWalkLayer();
   }
@@ -289,6 +426,9 @@ export class Designer {
   }
 
   applySelection() {
+    if (this.viewMode === '3d' && this.designer3d) {
+      this.designer3d.updateSelection();
+    }
     const bad = new Set((this.last?.issues ?? []).filter((i) => i.objId).map((i) => i.objId));
     for (const [id, g] of this.gs) {
       g.classList.toggle('sel', id === this.selected);
@@ -638,38 +778,82 @@ export class Designer {
 }
 
 /* ======================================================================
-   Dashboard section: pick (or create) a custom room, then design it.
+   Dashboard section: pick floor and room, then design it in 3D & 2D.
    ====================================================================== */
 export function designerSection(ed) {
-  const customs = ed.state.rooms.map((r, i) => ({ r, i })).filter((x) => x.r.scene === 'custom');
-  const create = () => {
-    const rooms = ed.state.rooms;
-    const room = ed.newCustomRoom();
-    rooms.push(room);
-    ed.designIndex = rooms.length - 1;
-    ed.markDirty(); ed.render();
-  };
+  const floors = ed.house?.floors || ed.state?.floors || [];
+  const floorIdx = Math.max(0, Math.min(floors.length - 1, ed.selectedFloorIdx || 0));
+  const activeFloor = floors[floorIdx] || { rooms: [] };
+  const rooms = activeFloor.rooms || [];
 
-  if (!customs.length) {
+  if (!rooms.length) {
     return [
-      el('p', { class: 'lead', text: 'Design a room of your own: choose its size, materials and lighting, then drag furniture, screens, pictures, text and info points onto the floor plan.' }),
-      el('button', { type: 'button', class: 'btn btn-primary', onclick: create }, 'Create my room'),
+      el('p', { class: 'lead', text: 'No rooms on this floor yet. Add a room first to design it in 3D and 2D.' }),
+      el('button', {
+        type: 'button',
+        class: 'btn btn-primary',
+        text: '➕ Go to Rooms & Ceilings',
+        onclick: () => { ed.section = 'rooms'; ed.render(); },
+      }),
     ];
   }
-  if (!customs.some((x) => x.i === ed.designIndex)) ed.designIndex = customs[0].i;
 
-  const picker = el('select', { 'aria-label': 'Room to design' }, customs.map(({ r, i }) => el('option', { value: String(i), text: r.name || r.id })));
-  picker.value = String(ed.designIndex);
-  picker.addEventListener('change', () => { ed.designIndex = Number(picker.value); ed.render(); });
+  const roomIdx = Math.max(0, Math.min(rooms.length - 1, ed.selectedRoomIdx || 0));
+  ed.selectedRoomIdx = roomIdx;
+  ed.designIndex = roomIdx;
 
-  const key = ed.state.rooms[ed.designIndex].id;
+  const floorPicker = el('select', {
+    class: 'input',
+    style: { maxWidth: '200px' },
+    onchange: (e) => {
+      ed.selectedFloorIdx = Number(e.target.value);
+      ed.selectedRoomIdx = 0;
+      ed.render();
+    },
+  }, ...floors.map((fl, i) => el('option', { value: String(i), selected: i === floorIdx, text: fl.name })));
+
+  const roomPicker = el('select', {
+    class: 'input',
+    style: { maxWidth: '240px' },
+    onchange: (e) => {
+      ed.selectedRoomIdx = Number(e.target.value);
+      ed.designIndex = Number(e.target.value);
+      ed.render();
+    },
+  }, ...rooms.map((rm, i) => el('option', { value: String(i), selected: i === roomIdx, text: rm.name || `Room ${i + 1}` })));
+
+  const activeRoom = rooms[roomIdx];
+  const key = `${activeFloor.id || floorIdx}::${activeRoom.id || roomIdx}`;
+
   let designer = ed.designers.get(key);
-  if (!designer || designer.ri !== ed.designIndex) { designer = new Designer(ed, ed.designIndex); ed.designers.set(key, designer); }
+  if (!designer || designer.ri !== roomIdx) {
+    designer = new Designer(ed, roomIdx);
+    ed.designers.set(key, designer);
+  }
 
   return [
-    el('div', { class: 'designer-head' },
-      el('label', { class: 'label', text: 'Room' }), picker,
-      el('button', { type: 'button', class: 'btn btn-small', onclick: create }, '+ New custom room')),
+    el('div', {
+      class: 'designer-head',
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        marginBottom: '14px',
+        background: '#1a1f2c',
+        padding: '10px 16px',
+        borderRadius: '8px',
+      },
+    },
+      el('label', { style: { color: '#94a3b8', fontSize: '0.9rem' }, text: 'Floor:' }), floorPicker,
+      el('label', { style: { color: '#94a3b8', fontSize: '0.9rem', marginLeft: '8px' }, text: 'Room:' }), roomPicker,
+      el('button', {
+        type: 'button',
+        class: 'btn btn-small',
+        style: { marginLeft: 'auto' },
+        text: '⚙️ Edit Room Finishes & Ceilings ↗',
+        onclick: () => { ed.section = 'rooms'; ed.render(); },
+      }),
+    ),
     designer.build(),
   ];
 }

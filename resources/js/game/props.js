@@ -270,8 +270,8 @@ export function moduleScreen(world, room, mod, { x, y = 0.9, z, rotY = 0, w = 3.
 
 /* ================================================================ props */
 
-export function desk(world, { x, z, rotY = 0, w = 1.8, d = 0.8, top = M.wood(), legs = STEEL(), h = 0.76 }) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rotY; world.scene.add(g);
+export function desk(world, { x, y = 0, z, rotY = 0, w = 1.8, d = 0.8, top = M.wood(), legs = STEEL(), h = 0.76 }) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = rotY; world.scene.add(g);
   world.box({ parent: g, y: h - 0.05, w, h: 0.05, d, material: top });
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     world.box({ parent: g, x: sx * (w / 2 - 0.06), z: sz * (d / 2 - 0.06), w: 0.05, h: h - 0.05, d: 0.05, material: legs });
@@ -280,8 +280,8 @@ export function desk(world, { x, z, rotY = 0, w = 1.8, d = 0.8, top = M.wood(), 
   return g;
 }
 
-export function chair(world, { x, z, rotY = 0, color = '#2b3038' }) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rotY; world.scene.add(g);
+export function chair(world, { x, y = 0, z, rotY = 0, color = '#2b3038' }) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = rotY; world.scene.add(g);
   const m = M.solid(color, { rough: 0.8 });
   world.cylinder({ parent: g, r: 0.22, h: 0.04, material: STEEL(), seg: 5 });
   world.box({ parent: g, y: 0.04, w: 0.05, h: 0.38, d: 0.05, material: STEEL() });
@@ -291,8 +291,8 @@ export function chair(world, { x, z, rotY = 0, color = '#2b3038' }) {
   return g;
 }
 
-export function sofa(world, { x, z, rotY = 0, w = 2.2, color = '#3b4452' }) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rotY; world.scene.add(g);
+export function sofa(world, { x, y = 0, z, rotY = 0, w = 2.2, color = '#3b4452' }) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = rotY; world.scene.add(g);
   const m = M.solid(color, { rough: 0.95 });
   world.box({ parent: g, y: 0.1, w, h: 0.32, d: 0.9, material: m });
   world.box({ parent: g, y: 0.42, z: -0.36, w, h: 0.45, d: 0.2, material: m });
@@ -303,16 +303,16 @@ export function sofa(world, { x, z, rotY = 0, w = 2.2, color = '#3b4452' }) {
   return g;
 }
 
-export function table(world, { x, z, w = 1.2, d = 0.7, h = 0.42, top = M.marble(), rotY = 0 }) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rotY; world.scene.add(g);
+export function table(world, { x, y = 0, z, w = 1.2, d = 0.7, h = 0.42, top = M.marble(), rotY = 0 }) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = rotY; world.scene.add(g);
   world.box({ parent: g, y: h - 0.04, w, h: 0.04, d, material: top });
   world.box({ parent: g, w: w * 0.8, h: h - 0.04, d: 0.06, material: STEEL() });
   world.collider(x, z, w, d, rotY);
   return g;
 }
 
-export function plant(world, { x, z, s = 1 }) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); world.scene.add(g);
+export function plant(world, { x, y = 0, z, s = 1 }) {
+  const g = new THREE.Group(); g.position.set(x, y, z); world.scene.add(g);
   world.cylinder({ parent: g, r: 0.28 * s, rTop: 0.34 * s, h: 0.55 * s, material: M.solid('#2c2f35', { rough: 0.5 }) });
   const leaf = M.solid('#2f6b4a', { rough: 0.8 });
   const leaf2 = M.solid('#3d8a5d', { rough: 0.8 });
@@ -328,8 +328,8 @@ export function plant(world, { x, z, s = 1 }) {
   return g;
 }
 
-export function bookshelf(world, { x, z, rotY = 0, w = 2, h = 2.2, d = 0.4, accent = '#d9a85f' }) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rotY; world.scene.add(g);
+export function bookshelf(world, { x, y = 0, z, rotY = 0, w = 2, h = 2.2, d = 0.4, accent = '#d9a85f' }) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = rotY; world.scene.add(g);
   const frame = M.solid('#1d2128', { rough: 0.6, metal: 0.3 });
   world.box({ parent: g, x: -w / 2 + 0.03, w: 0.06, h, d, material: frame });
   world.box({ parent: g, x: w / 2 - 0.03, w: 0.06, h, d, material: frame });
@@ -377,11 +377,13 @@ export function rug(world, { x, z, w, d, material = M.carpet(), y = 0.012 }) {
   return world.box({ x, y, z, w, h: 0.02, d, material, cast: false, tile: 2.5 });
 }
 
-export function floorLamp(world, { x, z, color = '#ffd9a0' }) {
-  world.cylinder({ x, z, r: 0.18, h: 0.04, material: STEEL() });
-  world.cylinder({ x, z, y: 0.04, r: 0.02, h: 1.5, material: STEEL(), seg: 8 });
-  world.cylinder({ x, z, y: 1.5, r: 0.2, rTop: 0.14, h: 0.3, material: M.emissive(color, 1.4), seg: 16, cast: false });
+export function floorLamp(world, { x, y = 0, z, color = '#ffd9a0' }) {
+  const g = new THREE.Group(); g.position.set(x, y, z); world.scene.add(g);
+  world.cylinder({ parent: g, r: 0.18, h: 0.04, material: STEEL() });
+  world.cylinder({ parent: g, y: 0.04, r: 0.02, h: 1.5, material: STEEL(), seg: 8 });
+  world.cylinder({ parent: g, y: 1.5, r: 0.2, rTop: 0.14, h: 0.3, material: M.emissive(color, 1.4), seg: 16, cast: false });
   world.collider(x, z, 0.3, 0.3);
+  return g;
 }
 
 /** Emissive ceiling light bar. */

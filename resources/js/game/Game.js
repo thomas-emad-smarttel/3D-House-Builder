@@ -4,6 +4,7 @@ import { Input } from './Input.js';
 import { Player } from './Player.js';
 import { Interactions } from './Interactions.js';
 import { buildMansion } from '../scenes/Mansion.js';
+import { buildHouseWorld } from '../scenes/HouseWorld.js';
 import { loadRoomBuilder } from '../scenes/index.js';
 
 const ease = (k) => k * k * (3 - 2 * k);
@@ -48,6 +49,11 @@ export class Game {
     this.intro = null;
     this.reduced = prefersReducedMotion();
     this.pendingRoom = null;   // set from ?room=ID (used by the dashboard's "Test in game")
+    this.houseData = data.house || null;
+    this.activeFloorLevel = 'all'; // Default to showing all floors with stairs!
+    this.isDollhouse = false;
+    const plotSize = Math.max(Number(this.houseData?.plot_width) || 30, Number(this.houseData?.plot_depth) || 30);
+    this.orbit = { yaw: 0.6, pitch: 0.55, dist: plotSize * 0.95 };
     this.ac = new AbortController();
     this.bind();
     this.resize();
@@ -55,7 +61,11 @@ export class Game {
 
   /* ------------------------------------------------------------- setup */
   async init() {
-    this.hub = buildMansion(this.ctx);
+    if (this.houseData) {
+      this.hub = buildHouseWorld(this.ctx, this.houseData, this.activeFloorLevel);
+    } else {
+      this.hub = buildMansion(this.ctx);
+    }
     this.world = this.hub;
     this.renderer.compile(this.hub.scene, this.camera);
     this.setState('welcome');
@@ -77,6 +87,34 @@ export class Game {
     click('hud-fullscreen', () => this.toggleFullscreen());
     click('btn-return', () => this.returnToMansion());
     click('capture-hint', () => this.capturePointer());
+    click('btn-camera-mode', () => this.toggleDollhouse());
+    click('hud-controls', () => this.ui.menus?.openControls?.());
+
+    // Dollhouse orbit controls (mouse drag to rotate, wheel to zoom)
+    let isDragging = false;
+    let prevMouse = { x: 0, y: 0 };
+    this.canvas.addEventListener('mousedown', (e) => {
+      if (this.isDollhouse && e.button === 0) {
+        isDragging = true;
+        prevMouse = { x: e.clientX, y: e.clientY };
+      }
+    }, o);
+    window.addEventListener('mousemove', (e) => {
+      if (this.isDollhouse && isDragging) {
+        const dx = e.clientX - prevMouse.x;
+        const dy = e.clientY - prevMouse.y;
+        prevMouse = { x: e.clientX, y: e.clientY };
+        this.orbit.yaw -= dx * 0.008;
+        this.orbit.pitch = Math.max(0.12, Math.min(Math.PI / 2 - 0.05, this.orbit.pitch + dy * 0.008));
+      }
+    }, o);
+    window.addEventListener('mouseup', () => { isDragging = false; }, o);
+    this.canvas.addEventListener('wheel', (e) => {
+      if (this.isDollhouse) {
+        e.preventDefault();
+        this.orbit.dist = Math.max(8, Math.min(80, this.orbit.dist + e.deltaY * 0.04));
+      }
+    }, { ...o, passive: false });
 
     this.input.on('interact', () => {
       if (this.state === 'intro') this.skipIntro();
@@ -88,7 +126,13 @@ export class Game {
     this.input.on('anykey', () => { if (this.state === 'intro') this.skipIntro(); });
     this.input.on('anyclick', () => { if (this.state === 'intro') this.skipIntro(); });
     this.input.on('canvasclick', () => {
-      if (this.state === 'play' && !this.input.isTouch) this.capturePointer();
+      if (this.state === 'play' && !this.input.isTouch && !this.isDollhouse) {
+        if (document.pointerLockElement === this.canvas) {
+          this.interactions.trigger();
+        } else {
+          this.capturePointer();
+        }
+      }
     });
   }
 
@@ -197,9 +241,77 @@ export class Game {
   }
 
   afterStart() {
+    this.updateFloorHud();
     const id = this.pendingRoom;
     this.pendingRoom = null;
     if (id) this.travel(id);
+  }
+
+  /* -------------------------------------------------- house builder tools */
+  switchFloor(level) {
+    if (!this.houseData) return;
+    this.activeFloorLevel = level;
+    if (this.world && this.world !== this.hub) this.world.dispose();
+    this.hub?.dispose();
+    this.hub = buildHouseWorld(this.ctx, this.houseData, this.activeFloorLevel);
+    this.world = this.hub;
+    const targetElev = level === 'all'
+      ? (this.world.floorElevations?.[0] || 0)
+      : Number(this.houseData.floors.find((f) => f.level === level)?.elevation || 0);
+    this.player.teleport(this.world.spawn.x, this.world.spawn.z, this.world.spawn.yaw, 0, targetElev);
+    this.updateFloorHud();
+  }
+
+  toggleDollhouse() {
+    this.isDollhouse = !this.isDollhouse;
+    const btn = document.getElementById('btn-camera-mode');
+    if (btn) btn.textContent = this.isDollhouse ? '🚶 Walk Inside' : '🏠 Dollhouse View';
+    if (this.isDollhouse) {
+      this.releasePointer();
+    } else {
+      this.player.applyCamera();
+      this.capturePointer();
+    }
+  }
+
+  updateFloorHud() {
+    const bar = document.getElementById('floor-selector-bar');
+    if (!bar || !this.houseData?.floors) return;
+
+    // "All Floors with Stairs" button
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.className = `chip${this.activeFloorLevel === 'all' ? ' chip-active' : ''}`;
+    allBtn.style.cssText = this.activeFloorLevel === 'all'
+      ? 'background:#3b82f6; color:#ffffff; font-weight:600;'
+      : 'background:rgba(30,41,59,0.85); color:#cbd5e1;';
+    allBtn.textContent = '🏰 All Floors & Stairs';
+    allBtn.onclick = () => this.switchFloor('all');
+
+    const floorButtons = this.houseData.floors.map((fl) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isActive = this.activeFloorLevel === fl.level;
+      btn.className = `chip${isActive ? ' chip-active' : ''}`;
+      btn.style.cssText = isActive
+        ? 'background:#3b82f6; color:#ffffff; font-weight:600;'
+        : 'background:rgba(30,41,59,0.85); color:#cbd5e1;';
+      btn.textContent = fl.name;
+      btn.onclick = () => this.switchFloor(fl.level);
+      return btn;
+    });
+
+    bar.replaceChildren(allBtn, ...floorButtons);
+
+    const hudRoom = document.getElementById('hud-room');
+    if (hudRoom) {
+      if (this.activeFloorLevel === 'all') {
+        hudRoom.textContent = `${this.houseData.title} · All Floors & Stairs`;
+      } else {
+        const currentFl = this.houseData.floors.find((f) => f.level === this.activeFloorLevel) || this.houseData.floors[0];
+        hudRoom.textContent = `${this.houseData.title} · ${currentFl?.name || 'Ground'}`;
+      }
+    }
   }
 
   /* ---------------------------------------------------------- pause */
@@ -387,8 +499,18 @@ export class Game {
     for (const u of w.updaters) u(dt, w.time);
 
     if (this.state === 'play') {
-      this.player.update(dt, this.input, w, this.audio);
-      this.interactions.update(this.player, w);
+      if (this.isDollhouse) {
+        const cy = (this.activeFloorLevel || 0) * 3.4;
+        const y = cy + this.orbit.dist * Math.sin(this.orbit.pitch);
+        const r = this.orbit.dist * Math.cos(this.orbit.pitch);
+        const x = r * Math.sin(this.orbit.yaw);
+        const z = r * Math.cos(this.orbit.yaw);
+        this.camera.position.set(x, y, z);
+        this.camera.lookAt(0, cy, 0);
+      } else {
+        this.player.update(dt, this.input, w, this.audio);
+        this.interactions.update(this.player, w);
+      }
     } else if (this.state === 'welcome') {
       this.backdrop(w.time);
     } else if (this.state === 'intro' && this.intro) {
@@ -398,6 +520,11 @@ export class Game {
   }
 
   backdrop(t) {
+    if (this.houseData) {
+      this.camera.position.set(Math.sin(t * 0.15) * 24, 12, Math.cos(t * 0.15) * 24);
+      this.camera.lookAt(0, 2.0, 0);
+      return;
+    }
     const end = this.hub.hallEnd;
     this.camera.position.set(Math.sin(t * 0.12) * 1.6, 3.3, 1.5 + Math.sin(t * 0.07) * 2.5);
     this.camera.lookAt(Math.sin(t * 0.09) * 0.8, 2.2, end);
