@@ -502,10 +502,15 @@ export function buildArchitecturalStairs(world, {
   const tread = run / steps;
   const angle = Math.atan2(dx, dz); // rotation around Y
 
-  const woodMat = style === 'marble' ? M.marble() : M.wood();
-  const steelMat = M.solid(stringerColor, { rough: 0.35, metal: 0.8 });
+  const isMarble = style === 'marble' || style === 'marble_modern';
+  const woodMat = isMarble ? M.marble() : M.wood();
+  const steelMat = isMarble
+    ? M.solid('#d4af37', { rough: 0.25, metal: 0.88 })
+    : M.solid(stringerColor, { rough: 0.35, metal: 0.8 });
   const glassMat = M.glass('#b8e2f8', 0.35);
-  const railMat = M.solid(handrailColor, { rough: 0.2, metal: 0.9 });
+  const railMat = isMarble
+    ? M.solid('#d4af37', { rough: 0.15, metal: 0.95 })
+    : M.solid(handrailColor, { rough: 0.2, metal: 0.9 });
   const ledGlow = M.emissive('#ffd9a0', 1.2);
 
   // Position and orient group at bottom of stairs
@@ -1801,6 +1806,28 @@ export function buildArchitecturalElevator(world, elDef, floors, ctx, activeLeve
       maxZ: Math.max(doorZ, doorZ + sign * landingD),
       elevation: elev,
       voidZone: null,
+    });
+
+    // Elevator Landing Vestibule Ceiling & Warm LED Lighting
+    const flH = Number(fl.height || 3.4);
+    world.box({
+      x: elX,
+      y: elev + flH - 0.05,
+      z: landingZ,
+      w: 7.2,
+      h: 0.1,
+      d: landingD,
+      material: M.solid('#0f172a', { rough: 0.8 }),
+    });
+    world.box({
+      x: elX,
+      y: elev + flH - 0.07,
+      z: landingZ,
+      w: 4.8,
+      h: 0.02,
+      d: 2.2,
+      material: M.emissive('#fff7ed', 1.2),
+      cast: false,
     });
 
     // 5. Central Hallway Exterior Front Facade & Panoramic City Windows (Floors 3-19)
