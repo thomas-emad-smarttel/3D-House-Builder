@@ -61,6 +61,9 @@ class LibraryController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
         $request->validate([
             'file' => ['required', 'file', 'max:204800'],
             'mtl_file' => ['nullable', 'file', 'max:204800'],
@@ -175,9 +178,11 @@ class LibraryController extends Controller
             }
         }
 
-        $content = isset($content) ? $content : file_get_contents($file->getRealPath());
-        if ($content === false) {
-            return response()->json(['message' => 'Could not read uploaded file.'], 422);
+        if ($ext !== 'obj' && ! isset($content)) {
+            $content = file_get_contents($file->getRealPath());
+            if ($content === false) {
+                return response()->json(['message' => 'Could not read uploaded file.'], 422);
+            }
         }
 
         // 1. Handle SVG
@@ -300,7 +305,10 @@ class LibraryController extends Controller
 
         // 3. Handle Wavefront 3D Model (OBJ with optional companion MTL)
         if ($ext === 'obj') {
-            $parsed = ObjParser::parse($content);
+            $parsed = isset($content)
+                ? ObjParser::parse($content)
+                : ObjParser::parseFile($file->getRealPath());
+
             if (! $parsed['valid']) {
                 return response()->json([
                     'message' => 'Invalid 3D OBJ file.',
@@ -311,7 +319,12 @@ class LibraryController extends Controller
             $id = 'obj_'.Str::lower(Str::slug(Str::limit($name, 25, ''))).'_'.Str::lower(Str::random(5));
             $objFileName = "{$id}.obj";
             $storageRel = "library/objects/{$objFileName}";
-            Storage::disk('public')->put($storageRel, $content);
+
+            if (isset($content)) {
+                Storage::disk('public')->put($storageRel, $content);
+            } else {
+                Storage::disk('public')->putFileAs('library/objects', $file, $objFileName);
+            }
 
             // Automatically optimize massive 3D models (> 50,000 faces) into lightweight web-ready models
             $fullObjPath = Storage::disk('public')->path($storageRel);
@@ -321,17 +334,14 @@ class LibraryController extends Controller
                     $cmd = 'node '.escapeshellarg($script).' '.escapeshellarg($fullObjPath).' 2>&1';
                     @exec($cmd, $optOut, $optCode);
                     if ($optCode === 0 && file_exists($fullObjPath)) {
-                        $optimizedContent = file_get_contents($fullObjPath);
-                        if ($optimizedContent !== false) {
-                            $reparsed = ObjParser::parse($optimizedContent);
-                            if ($reparsed['valid']) {
-                                $parsed['face_count'] = $reparsed['face_count'];
-                                $parsed['vertex_count'] = $reparsed['vertex_count'];
-                                $parsed['svg'] = $reparsed['svg'];
-                                $parsed['bbox'] = $reparsed['bbox'];
-                                $parsed['dimensions'] = $reparsed['dimensions'];
-                                $parsed['suggested'] = $reparsed['suggested'];
-                            }
+                        $reparsed = ObjParser::parseFile($fullObjPath);
+                        if ($reparsed['valid']) {
+                            $parsed['face_count'] = $reparsed['face_count'];
+                            $parsed['vertex_count'] = $reparsed['vertex_count'];
+                            $parsed['svg'] = $reparsed['svg'];
+                            $parsed['bbox'] = $reparsed['bbox'];
+                            $parsed['dimensions'] = $reparsed['dimensions'];
+                            $parsed['suggested'] = $reparsed['suggested'];
                         }
                     }
                 }

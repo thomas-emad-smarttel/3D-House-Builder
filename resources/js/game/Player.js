@@ -1,5 +1,5 @@
 import { SETTINGS, prefersReducedMotion } from '../config/settings.js';
-import { resolveCollisions } from './collision.js';
+import { resolveCollisions, resolveStairCollisions } from './collision.js';
 
 /** First-person controller: smooth acceleration, sub-stepped collisions, head bob, footsteps. */
 export class Player {
@@ -18,6 +18,7 @@ export class Player {
     this.stepDist = 0;
     this.reduced = prefersReducedMotion();
     this.currentElevation = 0;
+    this.onStairId = null;
   }
 
   teleport(x, z, yaw = 0, pitch = 0, y = null) {
@@ -35,6 +36,7 @@ export class Player {
     this.isGrounded = true;
     this.bob = 0;
     this.stepDist = 0;
+    this.onStairId = null;
     this.applyCamera();
   }
 
@@ -61,45 +63,111 @@ export class Player {
 
     const dx = this.vx * dt; const dz = this.vz * dt;
     const steps = Math.max(1, Math.min(4, Math.ceil(Math.hypot(dx, dz) / 0.25)));
+    const playerY = this.y || 0;
+    const colliders = (world.colliders && world.colliders.length > 50)
+      ? world.colliders.filter((c) => c.enabled !== false && (c.minY === undefined || (playerY + 1.8 > c.minY && playerY - 0.2 < c.maxY)))
+      : world.colliders;
+
     for (let i = 0; i < steps; i++) {
       this.x += dx / steps; this.z += dz / steps;
-      resolveCollisions(this, S.radius, world.colliders, world.bounds);
+      resolveCollisions(this, S.radius, colliders, world.bounds);
+      resolveStairCollisions(this, S.radius, world.stairs);
     }
 
     // Dynamic Stair & Multi-Floor Elevation Handling
     let targetElevation = null;
+    let activeStairId = null;
 
     if (world.stairs && world.stairs.length > 0) {
+      let bestCandidate = null;
+      let bestScore = -Infinity;
+
       for (const s of world.stairs) {
-        if (this.x >= s.minX && this.x <= s.maxX && this.z >= s.minZ && this.z <= s.maxZ) {
-          if (this.y >= s.startY - 0.8 && this.y <= s.endY + 0.8) {
-            const px = this.x - s.bottom.x;
-            const pz = this.z - s.bottom.z;
-            const t = Math.max(0, Math.min(1, (px * s.dx + pz * s.dz) / s.lenSq));
-            targetElevation = s.startY + t * (s.endY - s.startY);
-            this.currentElevation = targetElevation;
-            break;
+        const run = s.run || Math.hypot(s.dx, s.dz) || 0.001;
+        const ux = s.ux ?? (s.dx / run);
+        const uz = s.uz ?? (s.dz / run);
+        const vx = s.vx ?? (s.dz / run);
+        const vz = s.vz ?? (-s.dx / run);
+        const hw = s.halfWidth ?? ((s.width || 1.3) / 2);
+
+        const rx = this.x - s.bottom.x;
+        const rz = this.z - s.bottom.z;
+        const lz = rx * ux + rz * uz;
+        const lx = rx * vx + rz * vz;
+
+        // Player must be laterally within this flight
+        if (Math.abs(lx) > hw + 0.12) continue;
+
+        const t = Math.max(0, Math.min(1, lz / run));
+        const stairY = s.startY + t * (s.endY - s.startY);
+
+        // If walking underneath floating stairs with ample headroom, keep lower floor elevation
+        if (this.y + 1.75 < stairY - 0.15) {
+          continue;
+        }
+
+        // A person cannot climb a staircase from the side, but only from the bottom (or descend from top)
+        const atBottomEntrance = (lz >= -0.45 && lz <= 0.65 && Math.abs(this.y - s.startY) <= 0.55);
+        const atTopLanding = (lz >= run - 0.65 && lz <= run + 0.45 && Math.abs(this.y - s.endY) <= 0.55);
+        const alreadyClimbing = (this.onStairId === s.id && lz >= -0.35 && lz <= run + 0.35);
+        const landingOnStairs = (lz >= 0 && lz <= run && Math.abs(this.y - stairY) <= 0.55);
+
+        if (atBottomEntrance || atTopLanding || alreadyClimbing || landingOnStairs) {
+          let score = 100 - Math.abs(lx) * 15 - Math.abs(this.y - stairY) * 6;
+          if (this.onStairId === s.id) score += 60;
+
+          // Forward motion alignment bonus (ascending vs descending)
+          const speedAlong = (this.vx || 0) * ux + (this.vz || 0) * uz;
+          if (atBottomEntrance && speedAlong > 0.1) score += 35;
+          if (atTopLanding && speedAlong < -0.1) score += 35;
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestCandidate = { stair: s, stairY };
           }
         }
+      }
+
+      if (bestCandidate) {
+        targetElevation = bestCandidate.stairY;
+        activeStairId = bestCandidate.stair.id;
+        this.currentElevation = targetElevation;
       }
     }
 
+    this.onStairId = activeStairId;
+
     if (targetElevation === null) {
-      // Find nearest floor elevation underneath the player
-      const elevations = world.floorElevations || [0];
-      let bestFloor = elevations[0];
-      let minDiff = Infinity;
-      for (const elev of elevations) {
-        if (this.y >= elev - 0.6) {
-          const diff = Math.abs(this.y - elev);
-          if (diff < minDiff) {
-            minDiff = diff;
-            bestFloor = elev;
+      // Find floor slab physically underneath the player's (x, z) horizontal footprint
+      let foundElev = null;
+      let highestElev = -Infinity;
+
+      if (world.floorSlabs && world.floorSlabs.length > 0) {
+        for (const slab of world.floorSlabs) {
+          // Check if player (x, z) is inside this room or balcony floor slab footprint
+          if (this.x >= slab.minX && this.x <= slab.maxX && this.z >= slab.minZ && this.z <= slab.maxZ) {
+            // Check if standing directly over an open stairwell cutout
+            if (slab.voidZone) {
+              const vz = slab.voidZone;
+              if (this.x >= vz.minX && this.x <= vz.maxX && this.z >= vz.minZ && this.z <= vz.maxZ) {
+                continue; // Void hole: player falls through
+              }
+            }
+            // Candidate slab must be at or below player feet
+            if (this.y >= slab.elevation - 0.6) {
+              if (slab.elevation > highestElev) {
+                highestElev = slab.elevation;
+                foundElev = slab.elevation;
+              }
+            }
           }
         }
       }
-      targetElevation = bestFloor;
-      this.currentElevation = bestFloor;
+
+      // If standing on an upper floor slab, use that elevation; otherwise ground level is always 0.0!
+      // In mid-air outside buildings, targetElevation is 0.0, causing gravity to realistically drop player to the ground
+      targetElevation = foundElev !== null ? foundElev : 0.0;
+      this.currentElevation = targetElevation;
     }
 
     // Jumping physics & gravity
@@ -116,7 +184,12 @@ export class Player {
       this.isGrounded = false;
     }
 
-    if (!this.isGrounded) {
+    if (this.onStairId) {
+      // When walking on stairs, lock elevation directly to prevent any fall-through or desync
+      this.vy = 0;
+      this.y = targetElevation;
+      this.isGrounded = true;
+    } else if (!this.isGrounded) {
       this.vy -= gravity * dt;
       this.y += this.vy * dt;
 
@@ -129,7 +202,7 @@ export class Player {
       }
     } else {
       this.vy = 0;
-      this.y += (targetElevation - this.y) * Math.min(1, dt * 15);
+      this.y += (targetElevation - this.y) * Math.min(1, dt * 18);
     }
 
     const moved = Math.hypot(this.vx, this.vz);

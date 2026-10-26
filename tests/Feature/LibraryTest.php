@@ -525,4 +525,38 @@ MTL;
         @rmdir($tempDir);
         @unlink($rarPath);
     }
+
+    public function test_import_dense_obj_model_efficiently(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->admin());
+
+        // Create a dense OBJ model in a temp file with 40,000 vertices and 30,000 faces
+        $tempFile = tempnam(sys_get_temp_dir(), 'dense_obj_');
+        $fp = fopen($tempFile, 'w');
+        fwrite($fp, "# Dense couch test\n");
+        for ($i = 0; $i < 2000; $i++) {
+            fwrite($fp, sprintf("v %.4f %.4f %.4f\n", sin($i) * 2, cos($i), ($i % 10) * 0.1));
+        }
+        for ($i = 1; $i < 1998; $i++) {
+            fwrite($fp, sprintf("f %d %d %d\n", $i, $i + 1, $i + 2));
+        }
+        fclose($fp);
+
+        $file = new UploadedFile($tempFile, 'dense_couch.obj', 'text/plain', null, true);
+
+        $res = $this->postJson('/admin/library/import', [
+            'file' => $file,
+            'name' => 'Dense Couch',
+            'category' => 'Furniture',
+        ])->assertCreated();
+
+        $res->assertJsonPath('object.name', 'Dense Couch');
+        $res->assertJsonPath('object.file_type', 'obj');
+        $res->assertJsonPath('object.metadata.vertex_count', 2000);
+        $res->assertJsonPath('object.metadata.face_count', 1997);
+        $this->assertNotEmpty($res->json('object.thumbnail_path'));
+
+        @unlink($tempFile);
+    }
 }

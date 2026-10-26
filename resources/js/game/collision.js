@@ -64,3 +64,66 @@ export function blocked(x, z, radius, colliders, y = 0) {
   }
   return false;
 }
+
+/**
+ * Prevent player from penetrating or climbing stairs from the side.
+ * Stairs can only be mounted from the bottom entrance or the top landing.
+ * When on stairs, player is constrained within the left and right balustrades.
+ */
+export function resolveStairCollisions(p, radius, stairs) {
+  if (!stairs || stairs.length === 0) return;
+  const py = p.y || 0;
+
+  for (const s of stairs) {
+    const run = s.run || Math.hypot(s.dx, s.dz) || 0.001;
+    const ux = s.ux ?? (s.dx / run);
+    const uz = s.uz ?? (s.dz / run);
+    const vx = s.vx ?? (s.dz / run);
+    const vz = s.vz ?? (-s.dx / run);
+    const hw = s.halfWidth ?? ((s.width || 1.3) / 2);
+
+    const rx = p.x - s.bottom.x;
+    const rz = p.z - s.bottom.z;
+    const lz = rx * ux + rz * uz;
+    const lx = rx * vx + rz * vz;
+
+    // Quick bounding rejection
+    if (lz < -0.8 || lz > run + 0.8) continue;
+    if (Math.abs(lx) > hw + radius + 0.6) continue;
+
+    const t = Math.max(0, Math.min(1, lz / run));
+    const stairY = s.startY + t * (s.endY - s.startY);
+
+    // If walking underneath floating stairs with ample headroom, allow free passage
+    if (py + 1.75 < stairY - 0.15) {
+      continue;
+    }
+
+    const isOnThisStair = (p.onStairId === s.id);
+    const nearStairElevation = Math.abs(py - stairY) <= 0.55;
+
+    if (isOnThisStair || (nearStairElevation && Math.abs(lx) <= hw - 0.05)) {
+      // Player is climbing / on the stairs: keep player safely inside the left and right glass balustrades
+      const maxInner = Math.max(0.05, hw - 0.12);
+      if (Math.abs(lx) > maxInner) {
+        const clampedLx = Math.sign(lx) * maxInner;
+        p.x = s.bottom.x + lz * ux + clampedLx * vx;
+        p.z = s.bottom.z + lz * uz + clampedLx * vz;
+      }
+    } else {
+      // Player is outside the stairs (e.g. approaching from room/floor).
+      // Along the side flight of the stairs (open at bottom entrance and top landing):
+      if (lz > 0.45 && lz < run - 0.45) {
+        // Physical collision with the stair balustrade/stringer (only blocks players from lower floor climbing sides)
+        if (py < s.endY - 0.45 && py < stairY + 1.1 && py + 1.7 > s.startY) {
+          const minDist = hw + radius;
+          if (Math.abs(lx) < minDist) {
+            const pushedLx = (lx === 0 ? 1 : Math.sign(lx)) * minDist;
+            p.x = s.bottom.x + lz * ux + pushedLx * vx;
+            p.z = s.bottom.z + lz * uz + pushedLx * vz;
+          }
+        }
+      }
+    }
+  }
+}

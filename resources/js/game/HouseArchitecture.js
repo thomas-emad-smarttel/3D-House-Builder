@@ -291,7 +291,7 @@ export function buildFloorSlab(world, { x, y = 0, z, w, d, material, tile = 2.4,
 /**
  * Build Ceiling ("Clining") with rich architectural styles
  */
-export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor = '#ffffff', roomId, floorId }) {
+export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor = '#ffffff', roomId, floorId, voidZone = null }) {
   const type = (ceilingType || 'gypsum_led').toLowerCase();
   if (type === 'open_sky') {
     return null; // Rooftop or open balcony has no ceiling slab
@@ -308,21 +308,56 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
   const woodMat = M.wood();
   const emissiveLed = M.emissive('#ffd9a0', 1.8);
 
-  // Main base ceiling slab
-  world.box({
-    parent: group,
-    x: 0,
-    y: 0,
-    z: 0,
-    w,
-    h: 0.2,
-    d,
-    material: plasterMat,
-    cast: false,
-    receive: false,
-  });
+  // Ceilings sit below the upper floor structure (floor slabs sit from y - 0.28 to y)
+  // Placing the ceiling base at y: -0.32 with height 0.04 means its top is at -0.28 (flush with bottom of floor slab above)
+  // and its bottom is at -0.32. It CANNOT touch or Z-fight with upper floor materials.
+  const ceilingThick = 0.04;
+  const ceilingY = -0.30;
 
-  if (type === 'gypsum_led') {
+  if (!voidZone) {
+    world.box({
+      parent: group,
+      x: 0,
+      y: ceilingY,
+      z: 0,
+      w,
+      h: ceilingThick,
+      d,
+      material: plasterMat,
+      cast: false,
+      receive: false,
+    });
+  } else {
+    // Segment base slab around the stairwell opening
+    const minX = -w / 2;
+    const maxX = w / 2;
+    const minZ = -d / 2;
+    const maxZ = d / 2;
+
+    const vMinX = Math.max(minX, voidZone.minX - x);
+    const vMaxX = Math.min(maxX, voidZone.maxX - x);
+    const vMinZ = Math.max(minZ, voidZone.minZ - z);
+    const vMaxZ = Math.min(maxZ, voidZone.maxZ - z);
+
+    if (vMinX > minX) {
+      const leftW = vMinX - minX;
+      world.box({ parent: group, x: minX + leftW / 2, y: ceilingY, z: 0, w: leftW, h: ceilingThick, d, material: plasterMat, cast: false, receive: false });
+    }
+    if (maxX > vMaxX) {
+      const rightW = maxX - vMaxX;
+      world.box({ parent: group, x: vMaxX + rightW / 2, y: ceilingY, z: 0, w: rightW, h: ceilingThick, d, material: plasterMat, cast: false, receive: false });
+    }
+    if (vMinZ > minZ) {
+      const topD = vMinZ - minZ;
+      world.box({ parent: group, x: (vMinX + vMaxX) / 2, y: ceilingY, z: minZ + topD / 2, w: vMaxX - vMinX, h: ceilingThick, d: topD, material: plasterMat, cast: false, receive: false });
+    }
+    if (maxZ > vMaxZ) {
+      const bottomD = maxZ - vMaxZ;
+      world.box({ parent: group, x: (vMinX + vMaxX) / 2, y: ceilingY, z: vMaxZ + bottomD / 2, w: vMaxX - vMinX, h: ceilingThick, d: bottomD, material: plasterMat, cast: false, receive: false });
+    }
+  }
+
+  if (type === 'gypsum_led' && !voidZone) {
     // Gypsum dropped tray ceiling with hidden cove LED light around perimeter
     const margin = 0.8;
     const trayW = Math.max(1, w - margin * 2);
@@ -332,7 +367,7 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
     world.box({
       parent: group,
       x: 0,
-      y: -dropH,
+      y: ceilingY - dropH,
       z: 0,
       w: trayW,
       h: dropH,
@@ -342,12 +377,12 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
       receive: false,
     });
 
-    world.box({ parent: group, x: 0, y: -dropH / 2, z: -(trayD / 2 + 0.05), w: trayW, h: 0.03, d: 0.03, material: emissiveLed, cast: false });
-    world.box({ parent: group, x: 0, y: -dropH / 2, z: (trayD / 2 + 0.05), w: trayW, h: 0.03, d: 0.03, material: emissiveLed, cast: false });
-    world.box({ parent: group, x: -(trayW / 2 + 0.05), y: -dropH / 2, z: 0, w: 0.03, h: 0.03, d: trayD, material: emissiveLed, cast: false });
-    world.box({ parent: group, x: (trayW / 2 + 0.05), y: -dropH / 2, z: 0, w: 0.03, h: 0.03, d: trayD, material: emissiveLed, cast: false });
+    world.box({ parent: group, x: 0, y: ceilingY - dropH / 2, z: -(trayD / 2 + 0.05), w: trayW, h: 0.03, d: 0.03, material: emissiveLed, cast: false });
+    world.box({ parent: group, x: 0, y: ceilingY - dropH / 2, z: (trayD / 2 + 0.05), w: trayW, h: 0.03, d: 0.03, material: emissiveLed, cast: false });
+    world.box({ parent: group, x: -(trayW / 2 + 0.05), y: ceilingY - dropH / 2, z: 0, w: 0.03, h: 0.03, d: trayD, material: emissiveLed, cast: false });
+    world.box({ parent: group, x: (trayW / 2 + 0.05), y: ceilingY - dropH / 2, z: 0, w: 0.03, h: 0.03, d: trayD, material: emissiveLed, cast: false });
 
-    // Flush LED downlights at 4 corners (emissive glowing disks without heavy redundant PointLights)
+    // Flush LED downlights at 4 corners
     const spots = [
       [-trayW * 0.35, -trayD * 0.35],
       [trayW * 0.35, -trayD * 0.35],
@@ -358,7 +393,7 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
       world.cylinder({
         parent: group,
         x: sx,
-        y: -dropH - 0.005,
+        y: ceilingY - dropH - 0.005,
         z: sz,
         r: 0.09,
         h: 0.02,
@@ -367,17 +402,17 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
         cast: false,
       });
     }
-  } else if (type === 'wood_beams') {
+  } else if (type === 'wood_beams' && !voidZone) {
     // Exposed architectural wooden timber beams across the room depth
     const beamCount = Math.max(3, Math.round(w / 2.2));
     const beamW = 0.22;
-    const beamH = 0.25;
+    const beamH = 0.22;
     for (let i = 0; i < beamCount; i++) {
       const bx = -w / 2 + (w * (i + 0.5)) / beamCount;
       world.box({
         parent: group,
         x: bx,
-        y: -beamH / 2,
+        y: ceilingY - beamH,
         z: 0,
         w: beamW,
         h: beamH,
@@ -387,11 +422,11 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
         receive: false,
       });
     }
-  } else if (type === 'coffered') {
+  } else if (type === 'coffered' && !voidZone) {
     // Luxury coffered grid ceiling
     const cols = Math.max(2, Math.round(w / 3.0));
     const rows = Math.max(2, Math.round(d / 3.0));
-    const gridH = 0.18;
+    const gridH = 0.16;
     const ribW = 0.24;
 
     for (let i = 1; i < cols; i++) {
@@ -399,7 +434,7 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
       world.box({
         parent: group,
         x: gx,
-        y: -gridH / 2,
+        y: ceilingY - gridH,
         z: 0,
         w: ribW,
         h: gridH,
@@ -412,7 +447,7 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
       world.box({
         parent: group,
         x: 0,
-        y: -gridH / 2,
+        y: ceilingY - gridH,
         z: gz,
         w: w - 0.1,
         h: gridH,
@@ -420,15 +455,15 @@ export function buildCeiling(world, { x, y, z, w, d, ceilingType, ceilingColor =
         material: woodMat,
       });
     }
-  } else if (type === 'suspended') {
+  } else if (type === 'suspended' && !voidZone) {
     // Suspended commercial grid tiles
-    const tileMesh = world.box({
+    world.box({
       parent: group,
       x: 0,
-      y: -0.06,
+      y: ceilingY - 0.05,
       z: 0,
       w: w - 0.1,
-      h: 0.05,
+      h: 0.04,
       d: d - 0.1,
       material: M.tile(),
       tile: 1.5,
@@ -568,6 +603,21 @@ export function buildArchitecturalStairs(world, {
       cast: false,
     });
 
+    // Left Glass Balustrade Panel
+    world.box({
+      parent: g,
+      x: leftRailX,
+      y: (endY - startY) / 2 + balustradeH / 2,
+      z: run / 2,
+      w: glassThick,
+      h: balustradeH,
+      d: spineSlopeLen,
+      rotX: -pitchAngle,
+      centerY: true,
+      material: glassMat,
+      cast: false,
+    });
+
     // Right Polished Handrail
     world.box({
       parent: g,
@@ -603,6 +653,11 @@ export function buildArchitecturalStairs(world, {
   const maxX = Math.max(startX, endX) + width;
   const minZ = Math.min(startZ, endZ) - 0.8;
   const maxZ = Math.max(startZ, endZ) + 0.8;
+  const stairRun = Math.hypot(dx, dz) || 0.001;
+  const ux = dx / stairRun;
+  const uz = dz / stairRun;
+  const vx = dz / stairRun;
+  const vz = -dx / stairRun;
 
   world.stairs.push({
     id,
@@ -617,8 +672,14 @@ export function buildArchitecturalStairs(world, {
     top: { x: endX, z: endZ },
     dx,
     dz,
+    run: stairRun,
+    ux,
+    uz,
+    vx,
+    vz,
     lenSq: dx * dx + dz * dz,
     width,
+    halfWidth: width / 2,
   });
 
   g.userData.isStairs = true;
@@ -666,22 +727,25 @@ export function buildArchitecturalDoor(world, {
   // Top lintel runs inside cutout from x = -width/2 to +width/2
   world.box({ parent: g, x: 0, y: height - frameT / 2, z: 0, w: width, h: frameT, d: frameD, material: frameMat });
 
-  const innerW = width - frameT * 2;
-  const innerH = height - frameT;
+  const innerW = Math.max(0.2, width - frameT * 2);
+  const innerH = Math.max(0.2, height - frameT);
 
   // 2. Door Panel Pivot Group (for smooth opening animation)
   const pivot = new THREE.Group();
-  // Pivot placed at left frame hinge
-  pivot.position.set(-(width / 2 - frameT), 0, 0);
+  const closedPivotX = -(width / 2 - frameT);
+  const openPivotX = closedPivotX + width * 0.82;
+  // Pivot placed at left frame hinge (or sliding resting position)
+  pivot.position.set(closedPivotX, 0, 0);
   g.add(pivot);
 
   let pivotRight = null;
   let isOpen = false;
 
   // Door collider: blocks passage when door is closed, disabled when opened!
+  // Inset by 4cm on each side so it never wedges against adjacent wall colliders
   let doorCollider = null;
   if (type !== 'arch') {
-    doorCollider = world.collider(x, z, width, WALL_T, rotY);
+    doorCollider = world.collider(x, z, Math.max(0.6, width - 0.08), WALL_T, rotY, y, y + height);
   }
 
   if (type === 'front_entrance') {
@@ -696,32 +760,79 @@ export function buildArchitecturalDoor(world, {
       h: innerH - 0.01,
       d: panelThick,
       material: M.solid('#1e293b', { rough: 0.4, metal: 0.4 }),
-    });
-
-    // Decorative brass vertical accent strip
-    world.box({
-      parent: doorSlab,
-      x: innerW * 0.28,
-      y: 0,
-      z: panelThick / 2 + 0.005,
-      w: 0.05,
-      h: innerH - 0.3,
-      d: 0.01,
-      material: brassMat,
       cast: false,
     });
 
-    // Modern vertical long pull bar handle
-    world.cylinder({
-      parent: doorSlab,
-      x: innerW * 0.36,
-      y: 0,
-      z: panelThick / 2 + 0.04,
-      r: 0.02,
-      h: 1.2,
-      material: brassMat,
-      seg: 16,
-    });
+    // Horizontal architectural shadow reveal grooves on door slab
+    for (const gy of [-0.6, -0.2, 0.2, 0.6]) {
+      world.box({
+        parent: doorSlab,
+        x: 0,
+        y: gy,
+        z: 0,
+        w: innerW - 0.04,
+        h: 0.012,
+        d: panelThick + 0.004,
+        centerY: true,
+        material: M.solid('#0f172a', { rough: 0.8 }),
+        cast: false,
+      });
+    }
+
+    // Modern Luxury Vertical Pull Bar Handle (Both Front & Back of Door)
+    const handleH = 0.85;
+    const handleX = innerW * 0.35;
+    const handleR = 0.018;
+
+    for (const side of [1, -1]) {
+      const handleZ = side * (panelThick / 2 + 0.045);
+      const standoffZ = side * (panelThick / 2 + 0.022);
+
+      // Vertical Pull Bar
+      world.cylinder({
+        parent: doorSlab,
+        x: handleX,
+        y: -0.05,
+        z: handleZ,
+        r: handleR,
+        h: handleH,
+        centerY: true,
+        material: brassMat,
+        seg: 16,
+        cast: false,
+      });
+
+      // Top & Bottom Standoff Mounts
+      for (const my of [-0.05 - handleH * 0.38, -0.05 + handleH * 0.38]) {
+        world.cylinder({
+          parent: doorSlab,
+          x: handleX,
+          y: my,
+          z: standoffZ,
+          r: 0.012,
+          h: 0.045,
+          rotX: Math.PI / 2,
+          centerY: true,
+          material: brassMat,
+          seg: 12,
+          cast: false,
+        });
+      }
+
+      // Sleek Keyless Smart Lock Escutcheon Plate
+      world.box({
+        parent: doorSlab,
+        x: handleX,
+        y: -0.05,
+        z: side * (panelThick / 2 + 0.005),
+        w: 0.04,
+        h: 0.18,
+        d: 0.008,
+        centerY: true,
+        material: M.solid('#0f172a', { rough: 0.3, metal: 0.8 }),
+        cast: false,
+      });
+    }
   } else if (type === 'double_french') {
     // Double French glass doors (two leafs swinging opposite)
     const leafW = innerW / 2;
@@ -737,6 +848,7 @@ export function buildArchitecturalDoor(world, {
       h: innerH - 0.01,
       d: leafThick,
       material: frameMat,
+      cast: false,
     });
     // Glass pane in left leaf
     world.box({
@@ -747,20 +859,25 @@ export function buildArchitecturalDoor(world, {
       w: leafW - 0.14,
       h: innerH - 0.24,
       d: 0.015,
+      centerY: true,
       material: glassMat,
       cast: false,
     });
-    // Left handle
-    world.cylinder({
-      parent: leftLeaf,
-      x: leafW / 2 - 0.05,
-      y: -0.1,
-      z: leafThick / 2 + 0.02,
-      r: 0.015,
-      h: 0.2,
-      material: handleMat,
-      seg: 12,
-    });
+    // Left handles (front and back)
+    for (const side of [1, -1]) {
+      world.cylinder({
+        parent: leftLeaf,
+        x: leafW / 2 - 0.05,
+        y: -0.1,
+        z: side * (leafThick / 2 + 0.02),
+        r: 0.015,
+        h: 0.2,
+        centerY: true,
+        material: handleMat,
+        seg: 12,
+        cast: false,
+      });
+    }
 
     // Right Leaf on right pivot
     pivotRight = new THREE.Group();
@@ -776,6 +893,7 @@ export function buildArchitecturalDoor(world, {
       h: innerH - 0.01,
       d: leafThick,
       material: frameMat,
+      cast: false,
     });
     world.box({
       parent: rightLeaf,
@@ -785,53 +903,64 @@ export function buildArchitecturalDoor(world, {
       w: leafW - 0.14,
       h: innerH - 0.24,
       d: 0.015,
+      centerY: true,
       material: glassMat,
       cast: false,
     });
-    world.cylinder({
-      parent: rightLeaf,
-      x: -(leafW / 2 - 0.05),
-      y: -0.1,
-      z: leafThick / 2 + 0.02,
-      r: 0.015,
-      h: 0.2,
-      material: handleMat,
-      seg: 12,
-    });
+    for (const side of [1, -1]) {
+      world.cylinder({
+        parent: rightLeaf,
+        x: -(leafW / 2 - 0.05),
+        y: -0.1,
+        z: side * (leafThick / 2 + 0.02),
+        r: 0.015,
+        h: 0.2,
+        centerY: true,
+        material: handleMat,
+        seg: 12,
+        cast: false,
+      });
+    }
   } else if (type === 'sliding_glass') {
-    // Sliding patio glass door with top track
+    // Sliding patio glass door with top track and clear glass panel
+    const sashT = 0.05;
     const panelThick = 0.04;
     // Top track inside opening
-    world.box({ parent: g, x: 0, y: height - frameT / 2, z: 0, w: width - 0.01, h: frameT, d: frameD, material: frameMat });
-    // Glass sliding pane
-    const slab = world.box({
-      parent: pivot,
-      x: innerW / 2,
-      y: 0.01,
-      z: 0.02,
-      w: innerW - 0.02,
-      h: innerH - 0.01,
-      d: panelThick,
-      material: frameMat,
-    });
+    world.box({ parent: g, x: 0, y: height - frameT / 2, z: 0, w: width - 0.01, h: frameT, d: frameD, material: frameMat, cast: false });
+
+    const slidingGroup = new THREE.Group();
+    slidingGroup.position.set(innerW / 2, 0, 0.02);
+    pivot.add(slidingGroup);
+
+    // Outer sash frame (perimeter stiles and rails)
+    world.box({ parent: slidingGroup, x: -(innerW / 2 - sashT / 2), y: 0, z: 0, w: sashT, h: innerH - 0.01, d: panelThick, material: frameMat, cast: false });
+    world.box({ parent: slidingGroup, x: innerW / 2 - sashT / 2, y: 0, z: 0, w: sashT, h: innerH - 0.01, d: panelThick, material: frameMat, cast: false });
+    world.box({ parent: slidingGroup, x: 0, y: innerH - sashT - 0.01, z: 0, w: innerW - sashT * 2, h: sashT, d: panelThick, material: frameMat, cast: false });
+    world.box({ parent: slidingGroup, x: 0, y: 0.01, z: 0, w: innerW - sashT * 2, h: sashT, d: panelThick, material: frameMat, cast: false });
+
+    // Center clear transparent glass pane
     world.box({
-      parent: slab,
+      parent: slidingGroup,
       x: 0,
-      y: 0,
+      y: sashT + 0.01,
       z: 0,
-      w: innerW - 0.16,
-      h: innerH - 0.18,
-      d: 0.018,
+      w: Math.max(0.1, innerW - sashT * 2 - 0.01),
+      h: Math.max(0.1, innerH - sashT * 2 - 0.02),
+      d: 0.016,
       material: glassMat,
       cast: false,
     });
+
+    // Sleek vertical pull handle
+    world.box({ parent: slidingGroup, x: innerW * 0.38, y: innerH * 0.45, z: panelThick / 2 + 0.02, w: 0.03, h: 0.35, d: 0.02, centerY: true, material: handleMat, cast: false });
+    world.box({ parent: slidingGroup, x: innerW * 0.38, y: innerH * 0.45, z: -(panelThick / 2 + 0.02), w: 0.03, h: 0.35, d: 0.02, centerY: true, material: handleMat, cast: false });
   } else if (type === 'arch') {
     // Open cased architectural portal / archway between rooms:
     // Completely clear walk-through passage without any door panel or obstructing cylinder.
   } else if (type === 'barn_wood') {
     // Rustic modern sliding barn door
     const barnMat = M.wood();
-    world.box({ parent: g, x: 0, y: height + 0.04, z: 0.12, w: width * 1.3, h: 0.05, d: 0.05, material: frameMat });
+    world.box({ parent: g, x: 0, y: height + 0.04, z: 0.12, w: width * 1.3, h: 0.05, d: 0.05, material: frameMat, cast: false });
     const barnSlab = world.box({
       parent: pivot,
       x: innerW / 2,
@@ -841,9 +970,10 @@ export function buildArchitecturalDoor(world, {
       h: height + 0.04,
       d: 0.045,
       material: barnMat,
+      cast: false,
     });
     // Metal diagonal Z-brace
-    world.box({ parent: barnSlab, x: 0, y: 0, z: 0.025, w: width * 0.85, h: 0.06, d: 0.015, rotZ: 0.6, material: frameMat });
+    world.box({ parent: barnSlab, x: 0, y: 0, z: 0.025, w: width * 0.85, h: 0.06, d: 0.015, rotZ: 0.6, centerY: true, material: frameMat, cast: false });
   } else {
     // Standard interior hinged door
     const doorSlab = world.box({
@@ -855,14 +985,14 @@ export function buildArchitecturalDoor(world, {
       h: innerH - 0.01,
       d: 0.045,
       material: woodMat,
+      cast: false,
     });
 
-    // Door handle & backplate
-    world.box({ parent: doorSlab, x: innerW * 0.38, y: -0.1, z: 0.03, w: 0.04, h: 0.16, d: 0.01, material: handleMat });
-    world.box({ parent: doorSlab, x: innerW * 0.38, y: -0.1, z: -0.03, w: 0.04, h: 0.16, d: 0.01, material: handleMat });
-    // Lever handle
-    world.box({ parent: doorSlab, x: innerW * 0.34, y: -0.08, z: 0.05, w: 0.12, h: 0.025, d: 0.02, material: handleMat });
-    world.box({ parent: doorSlab, x: innerW * 0.34, y: -0.08, z: -0.05, w: 0.12, h: 0.025, d: 0.02, material: handleMat });
+    // Door handle & backplate (both sides)
+    for (const side of [1, -1]) {
+      world.box({ parent: doorSlab, x: innerW * 0.38, y: -0.1, z: side * 0.03, w: 0.04, h: 0.16, d: 0.01, centerY: true, material: handleMat, cast: false });
+      world.box({ parent: doorSlab, x: innerW * 0.34, y: -0.08, z: side * 0.05, w: 0.12, h: 0.025, d: 0.02, centerY: true, material: handleMat, cast: false });
+    }
   }
 
   // Interactive door toggle (open / close)
@@ -871,6 +1001,16 @@ export function buildArchitecturalDoor(world, {
 
   if (type !== 'arch') {
     const toggleDoor = () => {
+      // If closing, ensure player is not standing inside doorway to avoid wedging/trapping
+      if (isOpen && world.ctx?.game?.player) {
+        const pl = world.ctx.game.player;
+        const pDist = Math.hypot(pl.x - x, pl.z - z);
+        const pElev = pl.y || 0;
+        if (pDist < Math.max(0.9, width * 0.45) && Math.abs(pElev - y) < 2.0) {
+          return; // Player is inside doorway; safe guard prevents trapping
+        }
+      }
+
       isOpen = !isOpen;
       if (doorCollider) {
         doorCollider.enabled = !isOpen;
@@ -883,7 +1023,7 @@ export function buildArchitecturalDoor(world, {
       }
 
       const targetRot = isOpen ? -Math.PI * 0.48 : 0;
-      const targetSlide = isOpen ? width * 0.85 : 0;
+      const targetSlide = isOpen ? openPivotX : closedPivotX;
 
       // Animate smoothly
       const startRot = pivot.rotation.y;
@@ -911,8 +1051,9 @@ export function buildArchitecturalDoor(world, {
 
     interactItem = world.interact({
       x,
+      y,
       z,
-      radius: 3.2,
+      radius: 2.2,
       label: getPrompt,
       action: toggleDoor,
     });
@@ -939,6 +1080,9 @@ export function buildArchitecturalWindow(world, {
   g.position.set(x, y + sillHeight, z);
   g.rotation.y = rotY;
   world.scene.add(g);
+
+  // Solid Window Glass Collider: Blocks player from jumping or walking through glass windows!
+  world.collider(x, z, width, WALL_T, rotY, y + sillHeight, y + sillHeight + height);
 
   const frameT = 0.055;
   const frameD = WALL_T - 0.004; // Recessed 2mm inside wall opening to eliminate coplanar z-fighting with wall plaster
@@ -1011,6 +1155,8 @@ export function buildBalconyRailing(world, {
   from,
   to,
   ry = 0,
+  rx = 0,
+  rz = 0,
   roomId,
   floorId,
   wallKey,
@@ -1025,8 +1171,8 @@ export function buildBalconyRailing(world, {
   const glassMat = M.glass('#9fd4ff', 0.28);
   const metalMat = M.solid('#1e293b', { rough: 0.25, metal: 0.85 });
 
-  const px = axis === 'z' ? at : mid;
-  const pz = axis === 'x' ? at : mid;
+  const px = axis === 'z' ? at : rx + mid;
+  const pz = axis === 'x' ? at : rz + mid;
 
   // Base metallic plinth
   world.box({
@@ -1038,8 +1184,18 @@ export function buildBalconyRailing(world, {
     h: 0.08,
     d: axis === 'z' ? length : 0.08,
     material: metalMat,
-    collide: true,
   });
+
+  // Full-height safety railing collider (prevents walking or jumping over balcony edges)
+  world.collider(
+    px,
+    pz,
+    axis === 'x' ? length : 0.12,
+    axis === 'z' ? length : 0.12,
+    0,
+    ry,
+    ry + railH + 0.25
+  );
 
   // Architectural safety glass panel
   world.box({
@@ -1139,7 +1295,7 @@ export function buildRoomWallsWithCutouts(world, {
 
     if (isBalcony) {
       // Modern terrace/balcony balustrade instead of high concrete wall
-      buildBalconyRailing(world, { axis, at, from, to, ry, roomId, floorId, wallKey });
+      buildBalconyRailing(world, { axis, at, from, to, ry, rx, rz, roomId, floorId, wallKey });
       return;
     }
 
@@ -1171,7 +1327,7 @@ export function buildRoomWallsWithCutouts(world, {
       // Above the opening (lintel)
       const topOfOpening = op.y + op.h;
       if (h > topOfOpening) {
-        addSolid(leftEdge, rightEdge, topOfOpening, h - topOfOpening, false);
+        addSolid(leftEdge, rightEdge, topOfOpening, h - topOfOpening, true);
       }
 
       // Below the opening (sill / wall under window)
@@ -1212,6 +1368,10 @@ export function buildRoomWallsWithCutouts(world, {
             if (roomId) child.userData.roomId = roomId;
             if (floorId) child.userData.floorId = floorId;
           });
+
+          if (world.doors) {
+            world.doors.set(doorId, doorGroup);
+          }
         }
       } else if (op.type === 'window') {
         const windowId = op.data.id || `${roomId}-win-${wallKey}-${Math.round(op.c * 10)}`;
@@ -1239,6 +1399,10 @@ export function buildRoomWallsWithCutouts(world, {
             if (roomId) child.userData.roomId = roomId;
             if (floorId) child.userData.floorId = floorId;
           });
+
+          if (world.windows) {
+            world.windows.set(windowId, winGroup);
+          }
         }
       }
 
@@ -1292,4 +1456,407 @@ export function buildRoomWallsWithCutouts(world, {
     inwardRot: -Math.PI / 2,
     wallKey: 'east',
   });
+}
+
+/* ================================================================ ARCHITECTURAL HIGH-SPEED ELEVATOR */
+
+let activeElevatorModal = null;
+
+export function showElevatorModal(world, elDef, floors, currentLevel, ctx) {
+  if (activeElevatorModal) return;
+  if (document.pointerLockElement) {
+    try { document.exitPointerLock(); } catch { /* ignore */ }
+  }
+
+  const elX = Number(elDef.x ?? 0);
+  const elZ = Number(elDef.z ?? 5.2);
+  const depth = Number(elDef.depth ?? 3.6);
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'elevator-modal-backdrop';
+  backdrop.style.cssText = `
+    position: fixed; inset: 0; z-index: 99999;
+    background: rgba(8, 12, 22, 0.88); backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #f8fafc;
+  `;
+
+  // Modal Card
+  const card = document.createElement('div');
+  card.style.cssText = `
+    background: linear-gradient(145deg, #182234, #0b1120);
+    border: 2px solid #d4af37;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.8), 0 0 35px rgba(212,175,55,0.25);
+    border-radius: 20px; width: 92%; max-width: 680px; max-height: 88vh;
+    display: flex; flex-direction: column; overflow: hidden;
+  `;
+
+  // Header
+  const head = document.createElement('div');
+  head.style.cssText = `
+    padding: 20px 24px 16px; border-bottom: 1px solid rgba(212,175,55,0.3);
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(90deg, rgba(212,175,55,0.12), transparent);
+  `;
+  head.innerHTML = `
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.8rem;">🛗</span>
+        <div>
+          <h2 style="margin:0;font-size:1.25rem;font-weight:700;color:#f8fafc;letter-spacing:1px;">THE GRAND CELESTIAL HOTEL</h2>
+          <div style="font-size:0.82rem;color:#d4af37;font-weight:600;letter-spacing:0.5px;">EXPRESS HIGH-SPEED SKYLINE ELEVATOR</div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="close-btn" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#cbd5e1;font-size:1.2rem;width:34px;height:34px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+  `;
+
+  // Current Floor Status Indicator
+  const currentFloorObj = floors.find((f) => f.level === currentLevel) || floors[0];
+  const statusBar = document.createElement('div');
+  statusBar.style.cssText = `
+    padding: 10px 24px; background: rgba(0,0,0,0.35); font-size:0.85rem;
+    display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06);
+  `;
+  statusBar.innerHTML = `
+    <span style="color:#94a3b8;">Current Location:</span>
+    <span style="color:#38bdf8;font-weight:600;">Level ${currentLevel} — ${currentFloorObj?.name || 'Floor ' + currentLevel}</span>
+  `;
+
+  // Floors Grid
+  const list = document.createElement('div');
+  list.style.cssText = `
+    padding: 16px 20px; overflow-y: auto; flex: 1;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;
+  `;
+
+  // Sort floors descending: Level 19 down to 0 (penthouse on top)
+  const sortedFloors = [...floors].sort((a, b) => (b.level ?? 0) - (a.level ?? 0));
+
+  sortedFloors.forEach((fl) => {
+    const isCurrent = fl.level === currentLevel;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = `
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+      border-radius: 12px; cursor: ${isCurrent ? 'default' : 'pointer'};
+      border: 1px solid ${isCurrent ? '#10b981' : 'rgba(212,175,55,0.25)'};
+      background: ${isCurrent ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.04)'};
+      color: #f8fafc; text-align: left; transition: all 0.15s ease;
+    `;
+
+    const badge = document.createElement('span');
+    badge.style.cssText = `
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px; border-radius: 8px; font-weight: 700; font-size: 0.95rem;
+      background: ${isCurrent ? '#10b981' : 'linear-gradient(135deg, #d4af37, #92400e)'};
+      color: #0b1120; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    `;
+    badge.textContent = fl.level;
+
+    const info = document.createElement('div');
+    info.style.cssText = 'flex: 1; min-width: 0;';
+    info.innerHTML = `
+      <div style="font-weight: 600; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: ${isCurrent ? '#10b981' : '#f1f5f9'};">
+        ${fl.name}
+      </div>
+      <div style="font-size: 0.76rem; color: #94a3b8;">${isCurrent ? '● YOU ARE HERE' : 'Select to travel'}</div>
+    `;
+
+    btn.append(badge, info);
+
+    if (!isCurrent) {
+      btn.onmouseenter = () => {
+        btn.style.borderColor = '#d4af37';
+        btn.style.background = 'rgba(212,175,55,0.15)';
+        btn.style.transform = 'translateY(-1px)';
+      };
+      btn.onmouseleave = () => {
+        btn.style.borderColor = 'rgba(212,175,55,0.25)';
+        btn.style.background = 'rgba(255,255,255,0.04)';
+        btn.style.transform = 'none';
+      };
+      btn.onclick = async () => {
+        activeElevatorModal = null;
+        backdrop.remove();
+
+        const targetElev = Number(fl.elevation ?? (fl.level * 3.4));
+
+        try {
+          ctx?.audio?.door?.();
+        } catch { /* ignore */ }
+
+        // Fade wipe transition
+        if (ctx?.ui?.fade) {
+          await ctx.ui.fade.out(450, {
+            color: '#080c16',
+            title: `🛗 Traveling to Level ${fl.level} — ${fl.name}…`,
+          });
+        }
+
+        // Teleport player
+        if (ctx?.game?.player) {
+          const p = ctx.game.player;
+          const isSouth = (elDef.facing || 'south') === 'south';
+          p.x = elX;
+          p.z = isSouth ? (elZ + depth / 2 + 0.9) : (elZ - depth / 2 - 0.9);
+          p.y = targetElev;
+          p.currentElevation = targetElev;
+          p.targetElevation = targetElev;
+          p.vy = 0;
+          p.isGrounded = true;
+          p.yaw = isSouth ? 0 : Math.PI;
+        }
+
+        // Update activeFloorLevel if in editor mode
+        if (ctx?.game && ctx.game.activeFloorLevel !== undefined && ctx.game.activeFloorLevel !== 'all') {
+          ctx.game.activeFloorLevel = fl.level;
+          ctx.game.rebuildWorld?.();
+        }
+
+        if (ctx?.ui?.hud) {
+          ctx.ui.hud.setRoom(fl.name, '#d4af37');
+        }
+
+        if (ctx?.ui?.fade) {
+          await ctx.ui.fade.in(400);
+        }
+      };
+    }
+
+    list.append(btn);
+  });
+
+  const closeBtn = head.querySelector('.close-btn');
+  closeBtn.onclick = () => {
+    activeElevatorModal = null;
+    backdrop.remove();
+  };
+  backdrop.onclick = (e) => {
+    if (e.target === backdrop) {
+      activeElevatorModal = null;
+      backdrop.remove();
+    }
+  };
+
+  card.append(head, statusBar, list);
+  backdrop.append(card);
+  activeElevatorModal = backdrop;
+  document.body.append(backdrop);
+}
+
+export function buildArchitecturalElevator(world, elDef, floors, ctx, activeLevel = 'all') {
+  const elX = Number(elDef.x ?? 0);
+  const elZ = Number(elDef.z ?? -3.6);
+  const width = Number(elDef.width ?? 3.6);
+  const depth = Number(elDef.depth ?? 3.6);
+  const height = Number(elDef.height ?? 3.2);
+  const facing = elDef.facing || 'south';
+  const isSouth = facing === 'south';
+
+  const frameMat = M.solid('#334155', { metal: 0.85, rough: 0.25 });
+  const goldTrim = M.solid('#d4af37', { metal: 0.9, rough: 0.2 });
+  const doorMat = M.solid('#475569', { metal: 0.8, rough: 0.2 });
+  const darkGlass = M.solid('#090d16', { metal: 0.5, rough: 0.1 });
+  const cabinFloorMat = getFloorMaterial('marble');
+
+  const doorZ = isSouth ? (elZ + depth / 2) : (elZ - depth / 2);
+  const sign = isSouth ? 1 : -1;
+
+  for (const fl of floors) {
+    const elev = Number(fl.elevation ?? (fl.level * 3.4));
+
+    if (activeLevel !== 'all' && fl.level !== activeLevel) {
+      continue;
+    }
+
+    // 1. Elevator Portal on this floor
+    // Left & Right Portal Pillars
+    world.box({
+      x: elX - 1.25, y: elev, z: doorZ,
+      w: 0.35, h: 2.7, d: 0.3,
+      material: frameMat, collide: true,
+    });
+    world.box({
+      x: elX + 1.25, y: elev, z: doorZ,
+      w: 0.35, h: 2.7, d: 0.3,
+      material: frameMat, collide: true,
+    });
+    // Gold Accent Strips on pillars
+    world.box({
+      x: elX - 1.25, y: elev, z: doorZ + sign * 0.16,
+      w: 0.06, h: 2.7, d: 0.02,
+      material: goldTrim,
+    });
+    world.box({
+      x: elX + 1.25, y: elev, z: doorZ + sign * 0.16,
+      w: 0.06, h: 2.7, d: 0.02,
+      material: goldTrim,
+    });
+    // Header Beam
+    world.box({
+      x: elX, y: elev + 2.7, z: doorZ,
+      w: 2.85, h: 0.45, d: 0.3,
+      material: frameMat, collide: true,
+    });
+    // Digital Floor Indicator Screen
+    world.box({
+      x: elX, y: elev + 2.78, z: doorZ + sign * 0.16,
+      w: 1.5, h: 0.3, d: 0.02,
+      material: darkGlass,
+    });
+    world.box({
+      x: elX, y: elev + 2.78, z: doorZ + sign * 0.17,
+      w: 0.7, h: 0.15, d: 0.01,
+      material: M.emissive('#fbbf24', 2.0),
+    });
+
+    // 2. Sliding Elevator Doors (stainless steel hairline panels)
+    world.box({
+      x: elX - 0.52, y: elev, z: doorZ,
+      w: 1.0, h: 2.65, d: 0.08,
+      material: doorMat,
+    });
+    world.box({
+      x: elX + 0.52, y: elev, z: doorZ,
+      w: 1.0, h: 2.65, d: 0.08,
+      material: doorMat,
+    });
+    // Vertical recessed gold line in door center
+    world.box({
+      x: elX, y: elev, z: doorZ + sign * 0.03,
+      w: 0.04, h: 2.65, d: 0.02,
+      material: goldTrim,
+    });
+    // Door Collider (blocks walking through closed elevator shaft door)
+    world.collider(elX, doorZ, 2.1, 0.25, 0, elev, elev + 2.7);
+
+    // 3. Call Button Wall Station
+    world.box({
+      x: elX + 1.6, y: elev + 1.1, z: doorZ + sign * 0.16,
+      w: 0.14, h: 0.32, d: 0.03,
+      material: goldTrim,
+    });
+    world.box({
+      x: elX + 1.6, y: elev + 1.18, z: doorZ + sign * 0.18,
+      w: 0.04, h: 0.04, d: 0.02,
+      material: M.emissive('#fbbf24', 2.5),
+    });
+    world.box({
+      x: elX + 1.6, y: elev + 1.04, z: doorZ + sign * 0.18,
+      w: 0.04, h: 0.04, d: 0.02,
+      material: M.emissive('#fbbf24', 1.5),
+    });
+    // Interactive Call Button Trigger
+    world.interact({
+      x: elX,
+      y: elev,
+      z: doorZ + sign * 0.85,
+      radius: 3.2,
+      label: `[E] Call Elevator (${fl.name})`,
+      action: () => showElevatorModal(world, elDef, floors, fl.level, ctx),
+    });
+
+    // 4. Elevator Landing Vestibule Floor (solid marble floor extending into hallway)
+    const landingD = 4.2;
+    const landingZ = doorZ + sign * (landingD / 2);
+    world.box({
+      x: elX, y: elev - 0.02, z: landingZ,
+      w: 7.2, h: 0.08, d: landingD,
+      material: cabinFloorMat,
+    });
+    if (!world.floorSlabs) world.floorSlabs = [];
+    world.floorSlabs.push({
+      minX: elX - 3.6,
+      maxX: elX + 3.6,
+      minZ: Math.min(doorZ, doorZ + sign * landingD),
+      maxZ: Math.max(doorZ, doorZ + sign * landingD),
+      elevation: elev,
+      voidZone: null,
+    });
+
+    // 5. Elevator Cabin Enclosure
+    // Cabin Floor
+    world.box({
+      x: elX, y: elev - 0.02, z: elZ,
+      w: width - 0.3, h: 0.1, d: depth - 0.3,
+      material: cabinFloorMat,
+    });
+    world.floorSlabs.push({
+      minX: elX - (width - 0.3) / 2,
+      maxX: elX + (width - 0.3) / 2,
+      minZ: elZ - (depth - 0.3) / 2,
+      maxZ: elZ + (depth - 0.3) / 2,
+      elevation: elev,
+      voidZone: null,
+    });
+
+    // Cabin Ceiling (Warm glowing LED panel)
+    world.box({
+      x: elX, y: elev + height, z: elZ,
+      w: width - 0.3, h: 0.08, d: depth - 0.3,
+      material: M.emissive('#fff7ed', 1.4),
+      cast: false,
+    });
+
+    // Cabin Back Wall (Mirrored surface)
+    const backZ = isSouth ? (elZ - depth / 2 + 0.1) : (elZ + depth / 2 - 0.1);
+    world.box({
+      x: elX, y: elev, z: backZ,
+      w: width - 0.3, h: height, d: 0.08,
+      material: M.solid('#e2e8f0', { metal: 0.95, rough: 0.05 }),
+      collide: true,
+    });
+    // Back handrail
+    world.cylinder({
+      x: elX, y: elev + 1.0, z: backZ + sign * 0.12,
+      r: 0.03, h: width - 0.8,
+      material: goldTrim, rotZ: Math.PI / 2,
+    });
+
+    // Cabin Left Wall
+    world.box({
+      x: elX - width / 2 + 0.1, y: elev, z: elZ,
+      w: 0.08, h: height, d: depth - 0.3,
+      material: frameMat, collide: true,
+    });
+    // Cabin Right Wall
+    world.box({
+      x: elX + width / 2 - 0.1, y: elev, z: elZ,
+      w: 0.08, h: height, d: depth - 0.3,
+      material: frameMat, collide: true,
+    });
+    // Left & Right handrails
+    world.cylinder({
+      x: elX - width / 2 + 0.22, y: elev + 1.0, z: elZ,
+      r: 0.03, h: depth - 0.8,
+      material: goldTrim, rotX: Math.PI / 2,
+    });
+    world.cylinder({
+      x: elX + width / 2 - 0.22, y: elev + 1.0, z: elZ,
+      r: 0.03, h: depth - 0.8,
+      material: goldTrim, rotX: Math.PI / 2,
+    });
+
+    // Interior Control Panel on right wall
+    world.box({
+      x: elX + width / 2 - 0.18, y: elev + 1.3, z: elZ,
+      w: 0.04, h: 0.9, d: 0.25,
+      material: goldTrim,
+    });
+    world.box({
+      x: elX + width / 2 - 0.2, y: elev + 1.3, z: elZ,
+      w: 0.02, h: 0.8, d: 0.2,
+      material: darkGlass,
+    });
+    world.interact({
+      x: elX,
+      y: elev,
+      z: elZ,
+      radius: 2.6,
+      label: '[E] Elevator Control Panel — Select Floor (0 - 19)',
+      action: () => showElevatorModal(world, elDef, floors, fl.level, ctx),
+    });
+  }
 }

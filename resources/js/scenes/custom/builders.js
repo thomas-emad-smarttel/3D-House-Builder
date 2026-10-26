@@ -360,10 +360,10 @@ export const BUILDERS = {
     const y = Number(p.y || 0);
     const rotY = RADIANS(o.rot || 0);
     const color = p.color || def?.color || '#8b5cf6';
-    const solid = !!p.collide && y < 2.2;
+    const solid = !!p.collide;
 
     if (solid) {
-      world.collider(o.x, o.z, w, d, rotY);
+      world.collider(o.x, o.z, w, d, rotY, y, y + h);
     }
 
     const container = new THREE.Group();

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\House;
 use App\Models\User;
+use Database\Seeders\HouseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -236,5 +237,24 @@ class HouseProjectTest extends TestCase
 
         $this->assertTrue($h2->fresh()->is_default);
         $this->assertFalse($h1->fresh()->is_default);
+    }
+
+    public function test_hotel_seeder_creates_20_floors_60_rooms_with_elevator(): void
+    {
+        $this->seed(HouseSeeder::class);
+
+        $hotel = House::where('slug', 'grand-celestial-hotel')->first();
+        $this->assertNotNull($hotel);
+        $this->assertSame('The Grand Celestial Hotel & Luxury Suites', $hotel->title);
+
+        $floors = $hotel->getFloors();
+        $this->assertCount(20, $floors);
+
+        $totalRooms = collect($floors)->sum(fn ($f) => count($f['rooms']));
+        $this->assertSame(60, $totalRooms);
+
+        $elevators = $hotel->getElevators();
+        $this->assertCount(1, $elevators);
+        $this->assertCount(20, $elevators[0]['floors']);
     }
 }

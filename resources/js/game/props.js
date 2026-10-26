@@ -37,10 +37,10 @@ export const DOOR_ROT = { 'x+': Math.PI / 2, 'x-': -Math.PI / 2, 'z+': 0, 'z-': 
  * Sliding double door set into a wall. `inward` is the direction the hall/room lies
  * ('x+' = towards +X ...). Behind it is a small glowing alcove that lights up on open.
  */
-export function door(world, { x, z, inward, width = 2.4, height = 3.2, accent = '#d9a85f', thickness = 0.3 }) {
+export function door(world, { x, y = 0, z, inward, width = 2.4, height = 3.2, accent = '#d9a85f', thickness = 0.3 }) {
   const rotY = DOOR_ROT[inward];
   const g = new THREE.Group();
-  g.position.set(x, 0, z);
+  g.position.set(x, y, z);
   g.rotation.y = rotY;
   world.scene.add(g);
 
@@ -86,7 +86,7 @@ export function door(world, { x, z, inward, width = 2.4, height = 3.2, accent = 
   spill.position.set(0, 0.02, 1.7);
   g.add(spill);
 
-  const collider = world.collider(x, z, width + 0.28, thickness, rotY);
+  const collider = world.collider(x, z, width + 0.28, thickness, rotY, y, y + height);
   const accentColor = new THREE.Color(accent);
 
   const api = {
@@ -276,7 +276,7 @@ export function desk(world, { x, y = 0, z, rotY = 0, w = 1.8, d = 0.8, top = M.w
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     world.box({ parent: g, x: sx * (w / 2 - 0.06), z: sz * (d / 2 - 0.06), w: 0.05, h: h - 0.05, d: 0.05, material: legs });
   }
-  world.collider(x, z, w, d, rotY);
+  world.collider(x, z, w, d, rotY, y, y + h);
   return g;
 }
 
@@ -287,7 +287,7 @@ export function chair(world, { x, y = 0, z, rotY = 0, color = '#2b3038' }) {
   world.box({ parent: g, y: 0.04, w: 0.05, h: 0.38, d: 0.05, material: STEEL() });
   world.box({ parent: g, y: 0.42, w: 0.5, h: 0.08, d: 0.5, material: m });
   world.box({ parent: g, y: 0.5, z: 0.22, w: 0.5, h: 0.5, d: 0.07, material: m });
-  world.collider(x, z, 0.5, 0.5, rotY);
+  world.collider(x, z, 0.5, 0.5, rotY, y, y + 0.9);
   return g;
 }
 
@@ -299,7 +299,7 @@ export function sofa(world, { x, y = 0, z, rotY = 0, w = 2.2, color = '#3b4452' 
   world.box({ parent: g, y: 0.1, x: -(w / 2 - 0.11), w: 0.22, h: 0.6, d: 0.9, material: m });
   world.box({ parent: g, y: 0.1, x: w / 2 - 0.11, w: 0.22, h: 0.6, d: 0.9, material: m });
   for (const sx of [-1, 1]) world.box({ parent: g, x: sx * (w / 2 - 0.1), w: 0.06, h: 0.1, d: 0.7, material: STEEL() });
-  world.collider(x, z, w, 0.9, rotY);
+  world.collider(x, z, w, 0.9, rotY, y, y + 0.85);
   return g;
 }
 
@@ -307,7 +307,7 @@ export function table(world, { x, y = 0, z, w = 1.2, d = 0.7, h = 0.42, top = M.
   const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = rotY; world.scene.add(g);
   world.box({ parent: g, y: h - 0.04, w, h: 0.04, d, material: top });
   world.box({ parent: g, w: w * 0.8, h: h - 0.04, d: 0.06, material: STEEL() });
-  world.collider(x, z, w, d, rotY);
+  world.collider(x, z, w, d, rotY, y, y + h);
   return g;
 }
 
@@ -324,7 +324,7 @@ export function plant(world, { x, y = 0, z, s = 1 }) {
     m.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5);
     m.castShadow = true; g.add(m);
   }
-  world.collider(x, z, 0.6 * s, 0.6 * s);
+  world.collider(x, z, 0.6 * s, 0.6 * s, 0, y, y + 1.2 * s);
   return g;
 }
 
@@ -360,16 +360,16 @@ export function bookshelf(world, { x, y = 0, z, rotY = 0, w = 2, h = 2.2, d = 0.
   const books = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.12, h), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.9 }));
   books.position.set(0, h / 2, d / 2 - 0.1); books.receiveShadow = true;
   g.add(books);
-  world.collider(x, z, w, d, rotY);
+  world.collider(x, z, w, d, rotY, y, y + h);
   return g;
 }
 
-export function column(world, { x, z, h, r = 0.32, accent }) {
-  world.cylinder({ x, z, r, h, material: M.graphite(), collide: true, seg: 28 });
+export function column(world, { x, z, h, r = 0.32, accent, y = 0 }) {
+  world.cylinder({ x, y, z, r, h, material: M.graphite(), collide: true, seg: 28 });
   if (accent) {
     const m = M.emissive(accent, 1.1);
-    world.cylinder({ x, z, y: 0.35, r: r + 0.012, h: 0.05, material: m, cast: false, seg: 28 });
-    world.cylinder({ x, z, y: h - 0.55, r: r + 0.012, h: 0.05, material: m, cast: false, seg: 28 });
+    world.cylinder({ x, z, y: y + 0.35, r: r + 0.012, h: 0.05, material: m, cast: false, seg: 28 });
+    world.cylinder({ x, z, y: y + h - 0.55, r: r + 0.012, h: 0.05, material: m, cast: false, seg: 28 });
   }
 }
 
@@ -382,7 +382,7 @@ export function floorLamp(world, { x, y = 0, z, color = '#ffd9a0' }) {
   world.cylinder({ parent: g, r: 0.18, h: 0.04, material: STEEL() });
   world.cylinder({ parent: g, y: 0.04, r: 0.02, h: 1.5, material: STEEL(), seg: 8 });
   world.cylinder({ parent: g, y: 1.5, r: 0.2, rTop: 0.14, h: 0.3, material: M.emissive(color, 1.4), seg: 16, cast: false });
-  world.collider(x, z, 0.3, 0.3);
+  world.collider(x, z, 0.3, 0.3, 0, y, y + 1.8);
   return g;
 }
 

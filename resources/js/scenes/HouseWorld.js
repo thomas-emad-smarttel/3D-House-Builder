@@ -9,6 +9,7 @@ import {
   buildCeiling,
   buildRoomWallsWithCutouts,
   buildArchitecturalStairs,
+  buildArchitecturalElevator,
 } from '../game/HouseArchitecture.js';
 import { BUILDERS } from './custom/builders.js';
 import { syncLibrary, registerLibraryObject, typeDef } from './custom/catalog.js';
@@ -17,7 +18,9 @@ import { syncLibrary, registerLibraryObject, typeDef } from './custom/catalog.js
  * Builds the 3D House Environment with multi-floor levels, rooms, doors, ceilings, stairs and furniture.
  */
 export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', options = {}) {
-  const floors = houseData.floors || [];
+  const floors = (houseData.floors && Array.isArray(houseData.floors) && houseData.floors.length)
+    ? houseData.floors
+    : (houseData.floors_data && Array.isArray(houseData.floors_data) ? houseData.floors_data : (houseData.floors || []));
   const isAllFloors = activeFloorLevel === 'all' || options.allFloors === true || activeFloorLevel === undefined;
   const activeFloor = floors.find((f) => f.level === activeFloorLevel) || floors[0] || {
     id: 'floor-0',
@@ -46,6 +49,7 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
     return f.elevation !== undefined ? Number(f.elevation) : (Number(f.level || 0) * 3.4);
   }).sort((a, b) => a - b);
   if (!world.floorElevations.includes(0)) world.floorElevations.unshift(0);
+  world.floorSlabs = [];
 
   // Stairs definition list (connects floors)
   const stairsList = (houseData.stairs && Array.isArray(houseData.stairs) && houseData.stairs.length)
@@ -131,6 +135,12 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   });
 
   world.objects = new Map(); // o.id -> THREE.Object3D
+  world.doors = new Map();   // doorId -> THREE.Object3D
+  world.windows = new Map(); // windowId -> THREE.Object3D
+  world.stairs = [];         // Array of stair colliders for Player physics
+  world.stairsMeshes = new Map(); // stairsId -> THREE.Object3D
+  world.stairs.get = (id) => world.stairsMeshes.get(id);
+  world.stairs.set = (id, mesh) => world.stairsMeshes.set(id, mesh);
 
 /**
  * Deduplicate shared partition walls between adjacent rooms on the same floor.
@@ -193,6 +203,14 @@ function computeFloorWallDeduplication(rooms = []) {
               const aOffset = worldDoorX - A.rx;
               result.get(A.id).extraDoors.push({ ...bd, wall: 'north', offset: aOffset });
             }
+          } else {
+            result.get(A.id).skipWalls.north = true;
+            const aDoors = (A.room.layout?.doors || []).filter((d) => (d.wall || 'north').toLowerCase() === 'north');
+            for (const ad of aDoors) {
+              const worldDoorX = A.rx + (ad.offset || 0);
+              const bOffset = worldDoorX - B.rx;
+              result.get(B.id).extraDoors.push({ ...ad, wall: 'south', offset: bOffset });
+            }
           }
         }
       }
@@ -214,6 +232,14 @@ function computeFloorWallDeduplication(rooms = []) {
               const aOffset = worldDoorZ - A.rz;
               result.get(A.id).extraDoors.push({ ...bd, wall: 'east', offset: aOffset });
             }
+          } else {
+            result.get(A.id).skipWalls.east = true;
+            const aDoors = (A.room.layout?.doors || []).filter((d) => (d.wall || 'east').toLowerCase() === 'east');
+            for (const ad of aDoors) {
+              const worldDoorZ = A.rz + (ad.offset || 0);
+              const bOffset = worldDoorZ - B.rz;
+              result.get(B.id).extraDoors.push({ ...ad, wall: 'west', offset: bOffset });
+            }
           }
         }
       }
@@ -229,6 +255,14 @@ function computeFloorWallDeduplication(rooms = []) {
   for (const floor of targetFloors) {
     const elevation = floor.elevation !== undefined ? Number(floor.elevation) : (Number(floor.level || 0) * 3.4);
     const floorDedup = computeFloorWallDeduplication(floor.rooms || []);
+
+    const floorGroup = new THREE.Group();
+    floorGroup.name = `floor-${floor.level}-group`;
+    floorGroup.userData = { level: floor.level, elevation };
+    scene.add(floorGroup);
+    world.currentFloorGroup = floorGroup;
+    if (!world.floorGroups) world.floorGroups = new Map();
+    world.floorGroups.set(floor.level, floorGroup);
 
     for (const room of floor.rooms || []) {
       const layout = room.layout || {};
@@ -256,17 +290,42 @@ function computeFloorWallDeduplication(rooms = []) {
         playerSpawned = true;
       }
 
-      // 1. Floor Slab (with optional stairwell void opening)
-      let roomVoidZone = null;
+      // 1. Floor Slab & Ceiling Slab Stairwell Void Openings
+      let floorVoidZone = null;
+      let ceilingVoidZone = null;
+
       for (const st of stairsList) {
-        if (Math.abs(st.endY - elevation) < 0.3) {
-          const sMinX = Math.min(st.startX, st.endX) - (st.width || 1.4) / 2 - 0.1;
-          const sMaxX = Math.max(st.startX, st.endX) + (st.width || 1.4) / 2 + 0.1;
-          const sMinZ = Math.min(st.startZ, st.endZ) - 0.2;
-          const sMaxZ = Math.max(st.startZ, st.endZ) + 0.2;
-          if (rx - rw / 2 <= sMaxX && rx + rw / 2 >= sMinX && rz - rd / 2 <= sMaxZ && rz + rd / 2 >= sMinZ) {
-            roomVoidZone = { minX: sMinX, maxX: sMaxX, minZ: sMinZ, maxZ: sMaxZ };
-            break;
+        const sw = st.width || 1.3;
+        const hw = sw / 2;
+        const runX = st.endX - st.startX;
+        const runZ = st.endZ - st.startZ;
+        const runDist = Math.hypot(runX, runZ);
+        const dirX = runDist > 0.001 ? runX / runDist : 0;
+        const dirZ = runDist > 0.001 ? runZ / runDist : 0;
+
+        // Top cut terminates slightly before landing step so the upper floor landing is solid floor
+        const topCutX = st.endX - dirX * 0.25;
+        const topCutZ = st.endZ - dirZ * 0.25;
+
+        const sMinX = Math.min(st.startX, st.endX) - hw;
+        const sMaxX = Math.max(st.startX, st.endX) + hw;
+        const sMinZ = Math.min(st.startZ, st.endZ) - hw;
+        const sMaxZ = Math.max(st.startZ, st.endZ) + hw;
+        const inRoomBounds = rx - rw / 2 <= sMaxX && rx + rw / 2 >= sMinX && rz - rd / 2 <= sMaxZ && rz + rd / 2 >= sMinZ;
+
+        if (inRoomBounds) {
+          // Arriving staircase lands on this floor: cut void in floor slab, preserving top landing step & corridor
+          if (Math.abs(st.endY - elevation) < 0.4) {
+            floorVoidZone = {
+              minX: Math.min(st.startX, topCutX) - hw,
+              maxX: Math.max(st.startX, topCutX) + hw,
+              minZ: Math.min(st.startZ, topCutZ) - (Math.abs(dirZ) < 0.001 ? hw : 0),
+              maxZ: Math.max(st.startZ, topCutZ) + (Math.abs(dirZ) < 0.001 ? hw : 0),
+            };
+          }
+          // Ascending staircase climbs through this ceiling: cut void in ceiling slab
+          if (st.startY < (elevation + rh) && st.endY >= (elevation + rh - 0.4)) {
+            ceilingVoidZone = { minX: sMinX, maxX: sMaxX, minZ: sMinZ, maxZ: sMaxZ };
           }
         }
       }
@@ -281,7 +340,18 @@ function computeFloorWallDeduplication(rooms = []) {
         material: floorMat,
         roomId: room.id,
         floorId: floor.id,
-        voidZone: roomVoidZone,
+        voidZone: floorVoidZone,
+      });
+
+      // Register spatial boundaries of this floor slab for realistic gravity & mid-air drop detection
+      if (!world.floorSlabs) world.floorSlabs = [];
+      world.floorSlabs.push({
+        minX: rx - rw / 2 - 0.1,
+        maxX: rx + rw / 2 + 0.1,
+        minZ: rz - rd / 2 - 0.1,
+        maxZ: rz + rd / 2 + 0.1,
+        elevation: Number(elevation),
+        voidZone: floorVoidZone ? { ...floorVoidZone } : null,
       });
 
       // 2. Ceiling ("Clining")
@@ -295,6 +365,7 @@ function computeFloorWallDeduplication(rooms = []) {
         ceilingColor: theme.ceiling_color,
         roomId: room.id,
         floorId: floor.id,
+        voidZone: ceilingVoidZone,
       });
 
       if (options.showCeilings === false && ceilingGroup) {
@@ -305,10 +376,13 @@ function computeFloorWallDeduplication(rooms = []) {
       const isOutdoor = theme.ceiling === 'open_sky' || room.type === 'balcony';
       if (!isOutdoor) {
         const roomLightColor = theme.light === 'cool' ? '#d8e8ff' : '#ffeacc';
-        const roomLightIntensity = (theme.brightness || 1.0) * 16;
+        const roomLightIntensity = (theme.brightness || 1.0) * 12;
         const ptLight = new THREE.PointLight(roomLightColor, roomLightIntensity, Math.max(rw, rd) * 1.2, 2);
         ptLight.position.set(rx, elevation + rh - 0.4, rz);
-        scene.add(ptLight);
+        ptLight.userData = { level: floor.level, elevation };
+        floorGroup.add(ptLight);
+        if (!world.roomLights) world.roomLights = [];
+        world.roomLights.push(ptLight);
       }
 
       // 4. Perimeter Walls with Cutouts for Doors & Windows ("Build doorس")
@@ -378,13 +452,14 @@ function computeFloorWallDeduplication(rooms = []) {
 
         if (fn) {
           try {
-            const beforeCount = world.scene.children.length;
+            const container = world.currentFloorGroup ?? world.scene;
+            const beforeCount = container.children.length;
             fn(world, room, clonedObj, ctx, def);
-            const afterCount = world.scene.children.length;
+            const afterCount = container.children.length;
 
             const added = [];
             for (let i = beforeCount; i < afterCount; i++) {
-              added.push(world.scene.children[i]);
+              added.push(container.children[i]);
             }
 
             let mainObj = null;
@@ -393,9 +468,9 @@ function computeFloorWallDeduplication(rooms = []) {
             } else if (added.length > 1) {
               mainObj = new THREE.Group();
               mainObj.name = `group-${o.id}`;
-              world.scene.add(mainObj);
+              container.add(mainObj);
               for (const ch of added) {
-                world.scene.remove(ch);
+                container.remove(ch);
                 mainObj.add(ch);
               }
             }
@@ -419,13 +494,49 @@ function computeFloorWallDeduplication(rooms = []) {
         }
       }
     }
+    world.currentFloorGroup = null;
   }
 
   // 6. Build Architectural Stairs between floors
-  if (isAllFloors || targetFloors.length > 1 || activeFloorLevel === 0 || activeFloorLevel === 'all') {
-    for (const st of stairsList) {
-      buildArchitecturalStairs(world, st);
+  for (const st of stairsList) {
+    const sStartY = Number(st.startY ?? 0);
+    const sEndY = Number(st.endY ?? (sStartY + 3.4));
+    const sStartX = Number(st.startX ?? 0);
+    const sEndX = Number(st.endX ?? sStartX);
+    const sStartZ = Number(st.startZ ?? 0);
+    const sEndZ = Number(st.endZ ?? (sStartZ + 4.0));
+    const normalizedStair = {
+      ...st,
+      startX: sStartX,
+      startY: sStartY,
+      startZ: sStartZ,
+      endX: sEndX,
+      endY: sEndY,
+      endZ: sEndZ,
+      width: Number(st.width ?? 1.4),
+      steps: Number(st.steps ?? 18),
+    };
+
+    if (isAllFloors) {
+      const stairGroup = buildArchitecturalStairs(world, normalizedStair);
+      if (stairGroup && normalizedStair.id) world.stairs.set(normalizedStair.id, stairGroup);
+    } else {
+      // Single floor view: only build staircases connecting to the active floor
+      const activeElev = Number(activeFloor.elevation ?? (activeFloor.level * 3.4));
+      if (Math.abs(sStartY - activeElev) < 0.5 || Math.abs(sEndY - activeElev) < 0.5) {
+        const stairGroup = buildArchitecturalStairs(world, normalizedStair);
+        if (stairGroup && normalizedStair.id) world.stairs.set(normalizedStair.id, stairGroup);
+      }
     }
+  }
+
+  // 7. Build Architectural Elevators connecting floors
+  const elevatorsList = (houseData.elevators && Array.isArray(houseData.elevators) && houseData.elevators.length)
+    ? houseData.elevators
+    : ((env && Array.isArray(env.elevators)) ? env.elevators : []);
+
+  for (const elDef of elevatorsList) {
+    buildArchitecturalElevator(world, elDef, floors, ctx, isAllFloors ? 'all' : activeFloor.level);
   }
 
   // Set world bounds to plot size
@@ -435,6 +546,52 @@ function computeFloorWallDeduplication(rooms = []) {
     minZ: -plotD / 2,
     maxZ: plotD / 2,
   };
+
+  // 8. High-Performance Dynamic Culling for Multi-Story Buildings & Skyscraper Hotels
+  // Culls distant floor meshes and lights, eliminating lag, draw-call stutter, and GPU fragment overhead
+  if (isAllFloors && floors.length > 3) {
+    const spawnElev = Number(targetFloors[0]?.elevation ?? 0);
+
+    // Initial cull on spawn: keep only lights within 6m and floors within 13m
+    if (world.roomLights) {
+      for (const l of world.roomLights) {
+        l.visible = Math.abs(l.userData.elevation - spawnElev) <= 6.0;
+      }
+    }
+    if (world.floorGroups) {
+      for (const [lvl, grp] of world.floorGroups) {
+        grp.visible = Math.abs(grp.userData.elevation - spawnElev) <= 13.0;
+      }
+    }
+
+    // Continuous lightweight updater when player elevation shifts (elevator / stairs)
+    let lastCullElevation = spawnElev;
+    world.updaters.push(() => {
+      const playerY = ctx?.player?.y ?? ctx?.game?.player?.y ?? (ctx?.camera?.position?.y || 0);
+      if (Math.abs(playerY - lastCullElevation) < 1.0) return;
+      lastCullElevation = playerY;
+
+      const isDollhouse = ctx?.game?.isDollhouse || ctx?.isDollhouse || false;
+
+      // 1. PointLight Culling: only active floor (+-1 level) lights are processed by GPU
+      if (world.roomLights) {
+        for (const l of world.roomLights) {
+          l.visible = Math.abs(l.userData.elevation - playerY) <= 6.0;
+        }
+      }
+
+      // 2. Floor Mesh Culling: when inside, render only nearby floors (+-3 levels); in dollhouse, show whole skyscraper
+      if (world.floorGroups) {
+        for (const [lvl, grp] of world.floorGroups) {
+          if (isDollhouse) {
+            grp.visible = true;
+          } else {
+            grp.visible = Math.abs(grp.userData.elevation - playerY) <= 13.0;
+          }
+        }
+      }
+    });
+  }
 
   return world;
 }

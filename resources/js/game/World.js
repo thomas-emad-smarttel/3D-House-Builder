@@ -36,6 +36,7 @@ export class World {
     this.bounds = null;
     this.time = 0;
     this.disposed = false;
+    this.currentFloorGroup = null;
   }
 
   /** Box whose base sits at `y` (centre x/z) or centered at `y` when centerY is true. */
@@ -47,7 +48,7 @@ export class World {
     mesh.rotation.set(rotX, rotY, rotZ);
     mesh.castShadow = cast;
     mesh.receiveShadow = receive;
-    (parent ?? this.scene).add(mesh);
+    (parent ?? this.currentFloorGroup ?? this.scene).add(mesh);
     if (collide) mesh.userData.collider = this.collider(x, z, w, d, rotY, y, y + h);
     return mesh;
   }
@@ -58,7 +59,7 @@ export class World {
     mesh.position.set(x, centerY ? y : y + h / 2, z);
     mesh.rotation.set(rotX, rotY, rotZ);
     mesh.castShadow = cast; mesh.receiveShadow = true;
-    (parent ?? this.scene).add(mesh);
+    (parent ?? this.currentFloorGroup ?? this.scene).add(mesh);
     if (collide) mesh.userData.collider = this.collider(x, z, r * 1.8, r * 1.8, 0, y, y + h);
     return mesh;
   }

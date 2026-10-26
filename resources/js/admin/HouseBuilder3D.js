@@ -185,6 +185,11 @@ export class HouseBuilder3D {
   }
 
   get floors() {
+    if (!this.house.floors || !this.house.floors.length) {
+      if (this.house.floors_data && Array.isArray(this.house.floors_data) && this.house.floors_data.length) {
+        this.house.floors = this.house.floors_data;
+      }
+    }
     return this.house.floors || [];
   }
 
@@ -406,6 +411,9 @@ export class HouseBuilder3D {
       text: this.ed.dirty ? '💾 Save Changes *' : '💾 Saved',
       onclick: async () => {
         this.saveBtn.textContent = '⏳ Saving…';
+        if (this.house && this.house.floors) {
+          this.house.floors_data = this.house.floors;
+        }
         await this.ed.save();
         this.saveBtn.textContent = '✅ Saved';
         setTimeout(() => { if (!this.ed.dirty) this.saveBtn.textContent = '💾 Saved'; }, 2000);
@@ -659,7 +667,7 @@ export class HouseBuilder3D {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
       },
-      text: '🎮 W/A/S/D: Move Camera · 🖱️ Orbit / Pan · ↩️ Ctrl+Z: Undo · ↪️ Ctrl+Y: Redo · 🏹 Arrows: Move Selected',
+      text: '🎮 W/A/S/D: Move Camera · 🖱️ Orbit / Pan · ↩️ Ctrl+Z: Undo · ↪️ Ctrl+Y: Redo · 🏹 Arrows: Move · 🗑️ Del: Delete Selected · Esc: Deselect',
     });
 
     this.selectionToast = el('div', {
@@ -1088,12 +1096,14 @@ export class HouseBuilder3D {
         const maxOffset = Math.max(0.2, (wallLen / 2) - ((Number(dr.width) || 1.2) / 2) - 0.2);
 
         const offsetBadge = el('span', {
+          'data-door-offset-badge': dr.id,
           style: { fontSize: '0.78rem', color: '#60a5fa', fontWeight: '600' },
           text: (dr.offset || 0) === 0 ? 'Center (0.0m)' : `${(dr.offset || 0) > 0 ? '+' : ''}${Number(dr.offset || 0).toFixed(1)}m`,
         });
 
         const offsetSlider = el('input', {
           type: 'range',
+          'data-door-id': dr.id,
           min: (-maxOffset).toFixed(1),
           max: maxOffset.toFixed(1),
           step: '0.1',
@@ -1350,12 +1360,14 @@ export class HouseBuilder3D {
         const maxOffset = Math.max(0.2, (wallLen / 2) - ((Number(win.width) || 1.8) / 2) - 0.2);
 
         const offsetBadge = el('span', {
+          'data-win-offset-badge': win.id,
           style: { fontSize: '0.78rem', color: '#60a5fa', fontWeight: '600' },
           text: (win.offset || 0) === 0 ? 'Center (0.0m)' : `${(win.offset || 0) > 0 ? '+' : ''}${Number(win.offset || 0).toFixed(1)}m`,
         });
 
         const offsetSlider = el('input', {
           type: 'range',
+          'data-win-id': win.id,
           min: (-maxOffset).toFixed(1),
           max: maxOffset.toFixed(1),
           step: '0.1',
@@ -1973,9 +1985,10 @@ export class HouseBuilder3D {
       }, ...STAIR_STYLES.map(([val, label]) => el('option', { value: val, selected: st.style === val, text: label })));
 
       // Real-time Moving Controls: Position X & Z
-      const posXBadge = el('span', { style: { color: '#38bdf8', fontWeight: '600' }, text: `${Number(st.startX || 0).toFixed(1)}m` });
+      const posXBadge = el('span', { 'data-stairs-badge': 'x', style: { color: '#38bdf8', fontWeight: '600' }, text: `${Number(st.startX || 0).toFixed(1)}m` });
       const posXSlider = el('input', {
         type: 'range',
+        'data-stairs-pos': 'x',
         min: '-20',
         max: '20',
         step: '0.2',
@@ -1992,9 +2005,10 @@ export class HouseBuilder3D {
         },
       });
 
-      const posZBadge = el('span', { style: { color: '#38bdf8', fontWeight: '600' }, text: `${Number(st.startZ || 0).toFixed(1)}m` });
+      const posZBadge = el('span', { 'data-stairs-badge': 'z', style: { color: '#38bdf8', fontWeight: '600' }, text: `${Number(st.startZ || 0).toFixed(1)}m` });
       const posZSlider = el('input', {
         type: 'range',
+        'data-stairs-pos': 'z',
         min: '-20',
         max: '20',
         step: '0.2',
@@ -2238,6 +2252,116 @@ export class HouseBuilder3D {
     }
   }
 
+  deleteSelected() {
+    // 1. Delete selected furniture object
+    if (this.selectedObjectId) {
+      const room = this.currentRoom;
+      let objIdx = room?.layout?.objects?.findIndex((o) => o.id === this.selectedObjectId);
+      let targetRoom = room;
+
+      if (objIdx === undefined || objIdx === -1) {
+        for (const r of (this.currentFloor?.rooms || [])) {
+          const idx = r.layout?.objects?.findIndex((o) => o.id === this.selectedObjectId);
+          if (idx !== undefined && idx !== -1) {
+            objIdx = idx;
+            targetRoom = r;
+            break;
+          }
+        }
+      }
+
+      if (targetRoom?.layout?.objects && objIdx !== -1 && objIdx !== undefined) {
+        this.saveHistorySnapshot();
+        const deleted = targetRoom.layout.objects.splice(objIdx, 1)[0];
+        const deletedName = deleted?.type || deleted?.name || 'Object';
+        this.selectObject(null);
+        this.markDirty();
+        this.rebuild3D();
+        this.renderInspector();
+        this.showToast(`🗑️ Deleted: ${deletedName}`);
+        return true;
+      }
+    }
+
+    // 2. Delete selected door
+    if (this.selectedDoorId) {
+      let doorIdx = -1;
+      let targetRoom = this.currentRoom;
+      doorIdx = targetRoom?.layout?.doors?.findIndex((d) => d.id === this.selectedDoorId) ?? -1;
+
+      if (doorIdx === -1) {
+        for (const r of (this.currentFloor?.rooms || [])) {
+          const idx = r.layout?.doors?.findIndex((d) => d.id === this.selectedDoorId);
+          if (idx !== undefined && idx !== -1) {
+            doorIdx = idx;
+            targetRoom = r;
+            break;
+          }
+        }
+      }
+
+      if (targetRoom?.layout?.doors && doorIdx !== -1) {
+        this.saveHistorySnapshot();
+        const deleted = targetRoom.layout.doors.splice(doorIdx, 1)[0];
+        const label = deleted?.label || `${deleted?.type || 'Standard'} Door`;
+        this.selectedDoorId = null;
+        this.selectDoor(null);
+        this.markDirty();
+        this.renderInspector();
+        this.rebuild3D();
+        this.showToast(`🗑️ Deleted: ${label}`);
+        return true;
+      }
+    }
+
+    // 3. Delete selected window
+    if (this.selectedWindowId) {
+      let winIdx = -1;
+      let targetRoom = this.currentRoom;
+      winIdx = targetRoom?.layout?.windows?.findIndex((w) => w.id === this.selectedWindowId) ?? -1;
+
+      if (winIdx === -1) {
+        for (const r of (this.currentFloor?.rooms || [])) {
+          const idx = r.layout?.windows?.findIndex((w) => w.id === this.selectedWindowId);
+          if (idx !== undefined && idx !== -1) {
+            winIdx = idx;
+            targetRoom = r;
+            break;
+          }
+        }
+      }
+
+      if (targetRoom?.layout?.windows && winIdx !== -1) {
+        this.saveHistorySnapshot();
+        const deleted = targetRoom.layout.windows.splice(winIdx, 1)[0];
+        const label = `${deleted?.type || 'Standard'} Window`;
+        this.selectedWindowId = null;
+        this.selectWindow(null);
+        this.markDirty();
+        this.renderInspector();
+        this.rebuild3D();
+        this.showToast(`🗑️ Deleted: ${label}`);
+        return true;
+      }
+    }
+
+    // 4. Delete selected stairs
+    if (this.selectedStairsId) {
+      const idx = this.stairs.findIndex((s) => s.id === this.selectedStairsId);
+      if (idx !== -1) {
+        const deletedName = this.stairs[idx]?.name || 'Stairs';
+        const stId = this.selectedStairsId;
+        this.selectStairs(null);
+        this.deleteStairs(stId);
+        this.selectStairs(null);
+        this.showToast(`🗑️ Deleted: ${deletedName}`);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /* ------------------------------------------------------------- Actions */
   addNewRoom() {
     const floor = this.currentFloor;
@@ -2354,18 +2478,18 @@ export class HouseBuilder3D {
   updateSelectionToast() {
     if (!this.selectionToast) return;
     const room = this.currentRoom;
-    if (this.activeTab === 'levels' && this.selectedStairsId) {
+    if (this.selectedStairsId) {
       const st = this.stairs.find((s) => s.id === this.selectedStairsId);
-      this.selectionToast.textContent = `🪜 Stairs Selected: ${st?.name || 'Architectural Stairs'}`;
+      this.selectionToast.textContent = `🪜 Stairs Selected: ${st?.name || 'Architectural Stairs'} · [Del] to delete`;
     } else if (this.selectedDoorId) {
       const dr = room?.layout?.doors?.find((d) => d.id === this.selectedDoorId);
-      this.selectionToast.textContent = `🚪 Door Selected (${dr?.wall?.toUpperCase() || 'WALL'} Wall · Offset ${dr?.offset ?? 0}m) in ${room?.name || 'Room'}`;
+      this.selectionToast.textContent = `🚪 Door Selected (${dr?.wall?.toUpperCase() || 'WALL'} Wall · Offset ${dr?.offset ?? 0}m) · [Del] to delete`;
     } else if (this.selectedWindowId) {
       const win = room?.layout?.windows?.find((w) => w.id === this.selectedWindowId);
-      this.selectionToast.textContent = `🪟 Window Selected (${win?.wall?.toUpperCase() || 'WALL'} Wall · Offset ${win?.offset ?? 0}m) in ${room?.name || 'Room'}`;
+      this.selectionToast.textContent = `🪟 Window Selected (${win?.wall?.toUpperCase() || 'WALL'} Wall · Offset ${win?.offset ?? 0}m) · [Del] to delete`;
     } else if (this.selectedObjectId) {
       const obj = room?.layout?.objects?.find((o) => o.id === this.selectedObjectId);
-      this.selectionToast.textContent = `🪑 Object Selected: ${obj?.type || 'Furniture'} in ${room?.name || 'Room'}`;
+      this.selectionToast.textContent = `🪑 Object Selected: ${obj?.type || 'Furniture'} in ${room?.name || 'Room'} · [Del] to delete`;
     } else if (this.selectedWallKey && this.selectedWallKey !== 'all') {
       this.selectionToast.textContent = `🧱 ${this.selectedWallKey.toUpperCase()} Wall Selected in ${room?.name || 'Room'}`;
     } else {
@@ -2407,6 +2531,7 @@ export class HouseBuilder3D {
         if (!(k in parsed)) delete this.house[k];
       }
       Object.assign(this.house, parsed);
+      if (this.house.floors) this.house.floors_data = this.house.floors;
       this.ed.house = this.house;
 
       if (this.selectedFloorIdx >= this.floors.length) {
@@ -2445,6 +2570,7 @@ export class HouseBuilder3D {
         if (!(k in parsed)) delete this.house[k];
       }
       Object.assign(this.house, parsed);
+      if (this.house.floors) this.house.floors_data = this.house.floors;
       this.ed.house = this.house;
 
       if (this.selectedFloorIdx >= this.floors.length) {
@@ -2526,6 +2652,9 @@ export class HouseBuilder3D {
       if (e.value) {
         this.saveHistorySnapshot();
       } else {
+        if (this.selectedStairsId || this.selectedDoorId || this.selectedWindowId) {
+          this.rebuild3D();
+        }
         this.markDirty();
       }
     });
@@ -2607,14 +2736,25 @@ export class HouseBuilder3D {
       }
     });
 
-    // Restore selected object if still exists
+    // Restore selected object, stairs, door, or window if still exists
     if (this.selectedObjectId) {
       this.selectObject(this.selectedObjectId);
+    } else if (this.selectedStairsId) {
+      this.selectStairs(this.selectedStairsId);
+    } else if (this.selectedDoorId) {
+      this.selectDoor(this.selectedDoorId);
+    } else if (this.selectedWindowId) {
+      this.selectWindow(this.selectedWindowId);
     }
   }
 
   selectObject(objectId) {
     this.selectedObjectId = objectId;
+    if (objectId) {
+      this.selectedStairsId = null;
+      this.selectedDoorId = null;
+      this.selectedWindowId = null;
+    }
 
     if (this.objectBoxHelper && this.scene) {
       this.scene.remove(this.objectBoxHelper);
@@ -2638,7 +2778,126 @@ export class HouseBuilder3D {
       this.activeTab = 'furniture';
       this.renderInspector();
     } else {
-      if (this.transformControls) {
+      if (this.transformControls && !this.selectedStairsId && !this.selectedDoorId && !this.selectedWindowId) {
+        this.transformControls.detach();
+      }
+      this.updateSelectionToast();
+    }
+  }
+
+  selectStairs(stairsId) {
+    this.selectedStairsId = stairsId;
+    if (stairsId) {
+      this.selectedObjectId = null;
+      this.selectedDoorId = null;
+      this.selectedWindowId = null;
+    }
+
+    if (this.objectBoxHelper && this.scene) {
+      this.scene.remove(this.objectBoxHelper);
+      this.objectBoxHelper = null;
+    }
+
+    if (stairsId) {
+      const stairMesh = this.world?.stairs?.get(stairsId);
+      if (stairMesh) {
+        this.objectBoxHelper = new THREE.BoxHelper(stairMesh, 0xf59e0b);
+        this.scene.add(this.objectBoxHelper);
+        if (this.transformControls) {
+          this.transformControls.attach(stairMesh);
+        }
+        const st = this.stairs.find((s) => s.id === stairsId);
+        this.initialStairMeshPos = stairMesh.position.clone();
+        this.initialStairCoords = st ? { startX: Number(st.startX || 0), endX: Number(st.endX || 0), startZ: Number(st.startZ || 0), endZ: Number(st.endZ || 0) } : null;
+
+        if (this.selectionToast) {
+          this.selectionToast.textContent = `Selected: ${st?.name || 'Stairs'}`;
+        }
+      }
+      this.activeTab = 'levels';
+      this.renderInspector();
+    } else {
+      if (this.transformControls && !this.selectedObjectId && !this.selectedDoorId && !this.selectedWindowId) {
+        this.transformControls.detach();
+      }
+      this.updateSelectionToast();
+    }
+  }
+
+  selectDoor(doorId) {
+    this.selectedDoorId = doorId;
+    if (doorId) {
+      this.selectedObjectId = null;
+      this.selectedStairsId = null;
+      this.selectedWindowId = null;
+    }
+
+    if (this.objectBoxHelper && this.scene) {
+      this.scene.remove(this.objectBoxHelper);
+      this.objectBoxHelper = null;
+    }
+
+    if (doorId) {
+      const doorMesh = this.world?.doors?.get(doorId);
+      if (doorMesh) {
+        this.objectBoxHelper = new THREE.BoxHelper(doorMesh, 0x10b981);
+        this.scene.add(this.objectBoxHelper);
+        if (this.transformControls) {
+          this.transformControls.attach(doorMesh);
+        }
+        const room = this.currentRoom;
+        const dr = room?.layout?.doors?.find((d) => d.id === doorId);
+        this.initialDoorPos = doorMesh.position.clone();
+        this.initialDoorOffset = dr ? Number(dr.offset || 0) : 0;
+
+        if (this.selectionToast) {
+          this.selectionToast.textContent = `Selected: ${dr?.label || 'Door'} in ${room?.name || 'Room'}`;
+        }
+      }
+      this.activeTab = 'doors';
+      this.renderInspector();
+    } else {
+      if (this.transformControls && !this.selectedObjectId && !this.selectedStairsId && !this.selectedWindowId) {
+        this.transformControls.detach();
+      }
+      this.updateSelectionToast();
+    }
+  }
+
+  selectWindow(windowId) {
+    this.selectedWindowId = windowId;
+    if (windowId) {
+      this.selectedObjectId = null;
+      this.selectedStairsId = null;
+      this.selectedDoorId = null;
+    }
+
+    if (this.objectBoxHelper && this.scene) {
+      this.scene.remove(this.objectBoxHelper);
+      this.objectBoxHelper = null;
+    }
+
+    if (windowId) {
+      const winMesh = this.world?.windows?.get(windowId);
+      if (winMesh) {
+        this.objectBoxHelper = new THREE.BoxHelper(winMesh, 0x06b6d4);
+        this.scene.add(this.objectBoxHelper);
+        if (this.transformControls) {
+          this.transformControls.attach(winMesh);
+        }
+        const room = this.currentRoom;
+        const win = room?.layout?.windows?.find((w) => w.id === windowId);
+        this.initialWindowPos = winMesh.position.clone();
+        this.initialWindowOffset = win ? Number(win.offset || 0) : 0;
+
+        if (this.selectionToast) {
+          this.selectionToast.textContent = `Selected: Window in ${room?.name || 'Room'}`;
+        }
+      }
+      this.activeTab = 'windows';
+      this.renderInspector();
+    } else {
+      if (this.transformControls && !this.selectedObjectId && !this.selectedStairsId && !this.selectedDoorId) {
         this.transformControls.detach();
       }
       this.updateSelectionToast();
@@ -2646,19 +2905,117 @@ export class HouseBuilder3D {
   }
 
   onGizmoMove() {
-    const objMesh = this.transformControls?.object;
-    if (!objMesh || !this.selectedObjectId) return;
-    const room = this.currentRoom;
-    const rx = Number(room.layout?.position?.x) || 0;
-    const rz = Number(room.layout?.position?.z) || 0;
-    const obj = room.layout?.objects?.find((o) => o.id === this.selectedObjectId);
-    if (obj) {
-      obj.x = Math.round((objMesh.position.x - rx) * 10) / 10;
-      obj.z = Math.round((objMesh.position.z - rz) * 10) / 10;
+    const mesh = this.transformControls?.object;
+    if (!mesh) return;
+
+    // 1. Moving an object
+    if (this.selectedObjectId) {
+      const room = this.currentRoom;
+      const rx = Number(room.layout?.position?.x) || 0;
+      const rz = Number(room.layout?.position?.z) || 0;
+      const obj = room.layout?.objects?.find((o) => o.id === this.selectedObjectId);
+      if (obj) {
+        obj.x = Math.round((mesh.position.x - rx) * 10) / 10;
+        obj.z = Math.round((mesh.position.z - rz) * 10) / 10;
+      }
+      if (this.objectBoxHelper) this.objectBoxHelper.update();
+      this.updateInspectorSliders(obj);
+      this.markDirty();
+      return;
     }
-    if (this.objectBoxHelper) this.objectBoxHelper.update();
-    this.updateInspectorSliders(obj);
-    this.markDirty();
+
+    // 2. Moving stairs
+    if (this.selectedStairsId && this.initialStairMeshPos && this.initialStairCoords) {
+      const st = this.stairs.find((s) => s.id === this.selectedStairsId);
+      if (st) {
+        const dx = mesh.position.x - this.initialStairMeshPos.x;
+        const dz = mesh.position.z - this.initialStairMeshPos.z;
+        st.startX = Math.round((this.initialStairCoords.startX + dx) * 10) / 10;
+        st.endX = Math.round((this.initialStairCoords.endX + dx) * 10) / 10;
+        st.startZ = Math.round((this.initialStairCoords.startZ + dz) * 10) / 10;
+        st.endZ = Math.round((this.initialStairCoords.endZ + dz) * 10) / 10;
+        this.updateStairsSliders(st);
+        if (this.objectBoxHelper) this.objectBoxHelper.update();
+        this.markDirty();
+      }
+      return;
+    }
+
+    // 3. Moving a door along its wall
+    if (this.selectedDoorId && this.initialDoorPos) {
+      const room = this.currentRoom;
+      const dr = room?.layout?.doors?.find((d) => d.id === this.selectedDoorId);
+      if (dr) {
+        const wall = (dr.wall || 'south').toLowerCase();
+        let delta = 0;
+        if (wall === 'south' || wall === 'north') {
+          delta = mesh.position.x - this.initialDoorPos.x;
+          mesh.position.z = this.initialDoorPos.z;
+        } else {
+          delta = mesh.position.z - this.initialDoorPos.z;
+          mesh.position.x = this.initialDoorPos.x;
+        }
+        const wallLen = (wall === 'east' || wall === 'west') ? (room.layout?.size?.d || 8) : (room.layout?.size?.w || 10);
+        const maxOffset = Math.max(0.2, (wallLen / 2) - ((Number(dr.width) || 1.2) / 2) - 0.2);
+        dr.offset = Math.max(-maxOffset, Math.min(maxOffset, Math.round((this.initialDoorOffset + delta) * 10) / 10));
+        this.updateDoorSliders(dr);
+        if (this.objectBoxHelper) this.objectBoxHelper.update();
+        this.markDirty();
+      }
+      return;
+    }
+
+    // 4. Moving a window along its wall
+    if (this.selectedWindowId && this.initialWindowPos) {
+      const room = this.currentRoom;
+      const win = room?.layout?.windows?.find((w) => w.id === this.selectedWindowId);
+      if (win) {
+        const wall = (win.wall || 'north').toLowerCase();
+        let delta = 0;
+        if (wall === 'south' || wall === 'north') {
+          delta = mesh.position.x - this.initialWindowPos.x;
+          mesh.position.z = this.initialWindowPos.z;
+        } else {
+          delta = mesh.position.z - this.initialWindowPos.z;
+          mesh.position.x = this.initialWindowPos.x;
+        }
+        const wallLen = (wall === 'east' || wall === 'west') ? (room.layout?.size?.d || 8) : (room.layout?.size?.w || 10);
+        const maxOffset = Math.max(0.2, (wallLen / 2) - ((Number(win.width) || 1.8) / 2) - 0.2);
+        win.offset = Math.max(-maxOffset, Math.min(maxOffset, Math.round((this.initialWindowOffset + delta) * 10) / 10));
+        this.updateWindowSliders(win);
+        if (this.objectBoxHelper) this.objectBoxHelper.update();
+        this.markDirty();
+      }
+      return;
+    }
+  }
+
+  updateStairsSliders(st) {
+    if (!st || !this.inspectorPanel) return;
+    const posXBadge = this.inspectorPanel.querySelector('[data-stairs-badge="x"]');
+    const posXSlider = this.inspectorPanel.querySelector('input[data-stairs-pos="x"]');
+    const posZBadge = this.inspectorPanel.querySelector('[data-stairs-badge="z"]');
+    const posZSlider = this.inspectorPanel.querySelector('input[data-stairs-pos="z"]');
+    if (posXBadge) posXBadge.textContent = `${Number(st.startX || 0).toFixed(1)}m`;
+    if (posXSlider) posXSlider.value = String(st.startX || 0);
+    if (posZBadge) posZBadge.textContent = `${Number(st.startZ || 0).toFixed(1)}m`;
+    if (posZSlider) posZSlider.value = String(st.startZ || 0);
+  }
+
+  updateDoorSliders(dr) {
+    if (!dr || !this.inspectorPanel) return;
+    const slider = this.inspectorPanel.querySelector(`input[data-door-id="${dr.id}"]`);
+    const badge = this.inspectorPanel.querySelector(`[data-door-offset-badge="${dr.id}"]`);
+    if (slider) slider.value = String(dr.offset ?? 0);
+    if (badge) badge.textContent = (dr.offset || 0) === 0 ? 'Center (0.0m)' : `${(dr.offset || 0) > 0 ? '+' : ''}${Number(dr.offset || 0).toFixed(1)}m`;
+  }
+
+  updateWindowSliders(win) {
+    if (!win || !this.inspectorPanel) return;
+    const slider = this.inspectorPanel.querySelector(`input[data-win-id="${win.id}"]`);
+    const badge = this.inspectorPanel.querySelector(`[data-win-offset-badge="${win.id}"]`);
+    if (slider) slider.value = String(win.offset ?? 0);
+    if (badge) badge.textContent = (win.offset || 0) === 0 ? 'Center (0.0m)' : `${(win.offset || 0) > 0 ? '+' : ''}${Number(win.offset || 0).toFixed(1)}m`;
   }
 
   updateInspectorSliders(obj) {
@@ -2710,27 +3067,24 @@ export class HouseBuilder3D {
         return;
       }
 
-      // Escape key: deselect object
+      // Escape key: deselect any selected object, stairs, door, window
       if (e.key === 'Escape') {
         this.selectObject(null);
+        this.selectStairs(null);
+        this.selectDoor(null);
+        this.selectWindow(null);
+        this.selectedWallKey = null;
+        this.updateSelectionToast();
         this.renderInspector();
         return;
       }
 
-      // Delete / Backspace: delete selected object
-      if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedObjectId) {
-        const room = this.currentRoom;
-        const idx = room?.layout?.objects?.findIndex((o) => o.id === this.selectedObjectId);
-        if (idx !== -1) {
-          this.saveHistorySnapshot();
-          room.layout.objects.splice(idx, 1);
-          this.selectObject(null);
-          this.markDirty();
-          this.rebuild3D();
-          this.renderInspector();
+      // Delete / Backspace: delete selected object or any selected element (stairs, doors, windows, objects)
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (this.deleteSelected()) {
+          e.preventDefault();
+          return;
         }
-        e.preventDefault();
-        return;
       }
 
       // R key: rotate selected object by 90 degrees
@@ -2883,8 +3237,17 @@ export class HouseBuilder3D {
     this.dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.dragOffset = new THREE.Vector3();
     this.isDirectDragging = false;
+    this.dragType = null;
+
+    this.canvas.tabIndex = 1;
 
     this.canvas.addEventListener('pointerdown', (e) => {
+      // Clear input focus so W, A, S, D and keyboard shortcuts work immediately
+      if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        document.activeElement.blur();
+      }
+      this.canvas.focus();
+
       if (e.button !== 0) return; // only left click
       if (this.transformControls?.dragging) return;
 
@@ -2929,49 +3292,70 @@ export class HouseBuilder3D {
           if (clickedStairsId || clickedObjId || clickedDoorId || clickedWindowId) break;
         }
 
-        // 0. If clicked on stairs: SELECT IT & OPEN FLOORS & STAIRS TAB
+        // 0. If clicked on stairs: SELECT IT & START DRAG
         if (clickedStairsId) {
-          this.selectedStairsId = clickedStairsId;
-          this.selectedDoorId = null;
-          this.selectedWindowId = null;
-          this.selectObject(null);
-          this.activeTab = 'levels';
-          this.updateSelectionToast();
-          this.renderInspector();
+          this.selectStairs(clickedStairsId);
+          const stairMesh = this.world?.stairs?.get(clickedStairsId);
+          if (stairMesh) {
+            const elevation = this.currentFloor?.elevation ?? (this.currentFloor?.level * 3.4 || 0);
+            this.dragPlane.constant = -elevation;
+            const planeHit = new THREE.Vector3();
+            if (this.raycaster.ray.intersectPlane(this.dragPlane, planeHit)) {
+              this.saveHistorySnapshot();
+              this.dragOffset.subVectors(planeHit, stairMesh.position);
+              this.isDirectDragging = true;
+              this.dragType = 'stairs';
+              this.controls.enabled = false;
+            }
+          }
           return;
         }
 
-        // 1. If clicked on a door: SELECT IT & OPEN DOORS TAB
+        // 1. If clicked on a door: SELECT IT & START DRAG ALONG WALL
         if (clickedDoorId) {
           const floor = this.currentFloor;
           const rIdx = floor?.rooms?.findIndex((r) => r.id === clickedRoomId);
           if (rIdx !== undefined && rIdx !== -1) {
             this.selectedRoomIdx = rIdx;
           }
-          this.selectedDoorId = clickedDoorId;
-          this.selectedWindowId = null;
-          this.selectObject(null);
-          this.activeTab = 'doors';
-          this.updateSelectionToast();
-          this.renderInspector();
-          this.updateHighlightHelper();
+          this.selectDoor(clickedDoorId);
+          const doorMesh = this.world?.doors?.get(clickedDoorId);
+          if (doorMesh) {
+            const elevation = this.currentFloor?.elevation ?? (this.currentFloor?.level * 3.4 || 0);
+            this.dragPlane.constant = -elevation;
+            const planeHit = new THREE.Vector3();
+            if (this.raycaster.ray.intersectPlane(this.dragPlane, planeHit)) {
+              this.saveHistorySnapshot();
+              this.dragOffset.subVectors(planeHit, doorMesh.position);
+              this.isDirectDragging = true;
+              this.dragType = 'door';
+              this.controls.enabled = false;
+            }
+          }
           return;
         }
 
-        // 2. If clicked on a window: SELECT IT & OPEN WINDOWS TAB
+        // 2. If clicked on a window: SELECT IT & START DRAG ALONG WALL
         if (clickedWindowId) {
           const floor = this.currentFloor;
           const rIdx = floor?.rooms?.findIndex((r) => r.id === clickedRoomId);
           if (rIdx !== undefined && rIdx !== -1) {
             this.selectedRoomIdx = rIdx;
           }
-          this.selectedWindowId = clickedWindowId;
-          this.selectedDoorId = null;
-          this.selectObject(null);
-          this.activeTab = 'windows';
-          this.updateSelectionToast();
-          this.renderInspector();
-          this.updateHighlightHelper();
+          this.selectWindow(clickedWindowId);
+          const winMesh = this.world?.windows?.get(clickedWindowId);
+          if (winMesh) {
+            const elevation = this.currentFloor?.elevation ?? (this.currentFloor?.level * 3.4 || 0);
+            this.dragPlane.constant = -elevation;
+            const planeHit = new THREE.Vector3();
+            if (this.raycaster.ray.intersectPlane(this.dragPlane, planeHit)) {
+              this.saveHistorySnapshot();
+              this.dragOffset.subVectors(planeHit, winMesh.position);
+              this.isDirectDragging = true;
+              this.dragType = 'window';
+              this.controls.enabled = false;
+            }
+          }
           return;
         }
 
@@ -2985,6 +3369,7 @@ export class HouseBuilder3D {
           this.selectedWallKey = clickedWallKey;
           this.selectedDoorId = null;
           this.selectedWindowId = null;
+          this.selectedStairsId = null;
           this.selectObject(null);
           this.activeTab = 'rooms';
           this.updateSelectionToast();
@@ -2995,8 +3380,6 @@ export class HouseBuilder3D {
 
         // 4. If clicked on a furniture object: SELECT IT & START DRAG
         if (clickedObjId) {
-          this.selectedDoorId = null;
-          this.selectedWindowId = null;
           this.selectObject(clickedObjId);
           const objMesh = this.world?.objects?.get(clickedObjId);
           if (objMesh) {
@@ -3007,6 +3390,7 @@ export class HouseBuilder3D {
               this.saveHistorySnapshot();
               this.dragOffset.subVectors(planeHit, objMesh.position);
               this.isDirectDragging = true;
+              this.dragType = 'object';
               this.controls.enabled = false;
             }
           }
@@ -3021,6 +3405,7 @@ export class HouseBuilder3D {
             this.selectedRoomIdx = rIdx;
             this.selectedDoorId = null;
             this.selectedWindowId = null;
+            this.selectedStairsId = null;
             this.selectObject(null);
             this.updateSelectionToast();
             this.renderInspector();
@@ -3030,10 +3415,11 @@ export class HouseBuilder3D {
         }
       }
 
-      // Clicked ground outside -> deselect object
-      if (this.selectedObjectId || this.selectedDoorId || this.selectedWindowId) {
+      // Clicked ground outside -> deselect object, stairs, door, window
+      if (this.selectedObjectId || this.selectedDoorId || this.selectedWindowId || this.selectedStairsId) {
         this.selectedDoorId = null;
         this.selectedWindowId = null;
+        this.selectedStairsId = null;
         this.selectObject(null);
         this.updateSelectionToast();
         this.renderInspector();
@@ -3045,6 +3431,7 @@ export class HouseBuilder3D {
       this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
+      // 1. Direct dragging furniture object
       if (this.isDirectDragging && this.selectedObjectId) {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const planeHit = new THREE.Vector3();
@@ -3074,6 +3461,108 @@ export class HouseBuilder3D {
         return;
       }
 
+      // 2. Direct dragging stairs
+      if (this.isDirectDragging && this.selectedStairsId && this.initialStairMeshPos && this.initialStairCoords) {
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const planeHit = new THREE.Vector3();
+        if (this.raycaster.ray.intersectPlane(this.dragPlane, planeHit)) {
+          const stairMesh = this.world?.stairs?.get(this.selectedStairsId);
+          if (stairMesh) {
+            const newWorldX = planeHit.x - this.dragOffset.x;
+            const newWorldZ = planeHit.z - this.dragOffset.z;
+            stairMesh.position.x = newWorldX;
+            stairMesh.position.z = newWorldZ;
+
+            const st = this.stairs.find((s) => s.id === this.selectedStairsId);
+            if (st) {
+              const dx = newWorldX - this.initialStairMeshPos.x;
+              const dz = newWorldZ - this.initialStairMeshPos.z;
+              st.startX = Math.round((this.initialStairCoords.startX + dx) * 10) / 10;
+              st.endX = Math.round((this.initialStairCoords.endX + dx) * 10) / 10;
+              st.startZ = Math.round((this.initialStairCoords.startZ + dz) * 10) / 10;
+              st.endZ = Math.round((this.initialStairCoords.endZ + dz) * 10) / 10;
+              this.updateStairsSliders(st);
+            }
+            if (this.objectBoxHelper) this.objectBoxHelper.update();
+            this.markDirty();
+          }
+        }
+        this.canvas.style.cursor = 'grabbing';
+        return;
+      }
+
+      // 3. Direct dragging door along wall
+      if (this.isDirectDragging && this.selectedDoorId && this.initialDoorPos) {
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const planeHit = new THREE.Vector3();
+        if (this.raycaster.ray.intersectPlane(this.dragPlane, planeHit)) {
+          const doorMesh = this.world?.doors?.get(this.selectedDoorId);
+          if (doorMesh) {
+            const room = this.currentRoom;
+            const dr = room?.layout?.doors?.find((d) => d.id === this.selectedDoorId);
+            if (dr) {
+              const wall = (dr.wall || 'south').toLowerCase();
+              let delta = 0;
+              if (wall === 'south' || wall === 'north') {
+                const newX = planeHit.x - this.dragOffset.x;
+                delta = newX - this.initialDoorPos.x;
+                doorMesh.position.x = newX;
+                doorMesh.position.z = this.initialDoorPos.z;
+              } else {
+                const newZ = planeHit.z - this.dragOffset.z;
+                delta = newZ - this.initialDoorPos.z;
+                doorMesh.position.z = newZ;
+                doorMesh.position.x = this.initialDoorPos.x;
+              }
+              const wallLen = (wall === 'east' || wall === 'west') ? (room.layout?.size?.d || 8) : (room.layout?.size?.w || 10);
+              const maxOffset = Math.max(0.2, (wallLen / 2) - ((Number(dr.width) || 1.2) / 2) - 0.2);
+              dr.offset = Math.max(-maxOffset, Math.min(maxOffset, Math.round((this.initialDoorOffset + delta) * 10) / 10));
+              this.updateDoorSliders(dr);
+              if (this.objectBoxHelper) this.objectBoxHelper.update();
+              this.markDirty();
+            }
+          }
+        }
+        this.canvas.style.cursor = 'grabbing';
+        return;
+      }
+
+      // 4. Direct dragging window along wall
+      if (this.isDirectDragging && this.selectedWindowId && this.initialWindowPos) {
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const planeHit = new THREE.Vector3();
+        if (this.raycaster.ray.intersectPlane(this.dragPlane, planeHit)) {
+          const winMesh = this.world?.windows?.get(this.selectedWindowId);
+          if (winMesh) {
+            const room = this.currentRoom;
+            const win = room?.layout?.windows?.find((w) => w.id === this.selectedWindowId);
+            if (win) {
+              const wall = (win.wall || 'north').toLowerCase();
+              let delta = 0;
+              if (wall === 'south' || wall === 'north') {
+                const newX = planeHit.x - this.dragOffset.x;
+                delta = newX - this.initialWindowPos.x;
+                winMesh.position.x = newX;
+                winMesh.position.z = this.initialWindowPos.z;
+              } else {
+                const newZ = planeHit.z - this.dragOffset.z;
+                delta = newZ - this.initialWindowPos.z;
+                winMesh.position.z = newZ;
+                winMesh.position.x = this.initialWindowPos.x;
+              }
+              const wallLen = (wall === 'east' || wall === 'west') ? (room.layout?.size?.d || 8) : (room.layout?.size?.w || 10);
+              const maxOffset = Math.max(0.2, (wallLen / 2) - ((Number(win.width) || 1.8) / 2) - 0.2);
+              win.offset = Math.max(-maxOffset, Math.min(maxOffset, Math.round((this.initialWindowOffset + delta) * 10) / 10));
+              this.updateWindowSliders(win);
+              if (this.objectBoxHelper) this.objectBoxHelper.update();
+              this.markDirty();
+            }
+          }
+        }
+        this.canvas.style.cursor = 'grabbing';
+        return;
+      }
+
       // Throttled hover feedback using cached interactive meshes (zero scene traversal!)
       const now = performance.now();
       if (!this._lastHoverCheck || now - this._lastHoverCheck > 60) {
@@ -3095,9 +3584,14 @@ export class HouseBuilder3D {
 
     const stopDragging = () => {
       if (this.isDirectDragging) {
+        const needsRebuild = this.dragType === 'stairs' || this.dragType === 'door' || this.dragType === 'window';
         this.isDirectDragging = false;
+        this.dragType = null;
         this.controls.enabled = true;
         this.markDirty();
+        if (needsRebuild) {
+          this.rebuild3D();
+        }
       }
     };
 

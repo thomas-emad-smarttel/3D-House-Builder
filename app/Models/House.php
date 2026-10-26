@@ -32,6 +32,7 @@ class House extends Model
     protected $appends = [
         'floors',
         'stairs',
+        'elevators',
     ];
 
     public function getFloorsAttribute(): array
@@ -42,6 +43,11 @@ class House extends Model
     public function getStairsAttribute(): array
     {
         return $this->getStairs();
+    }
+
+    public function getElevatorsAttribute(): array
+    {
+        return $this->getElevators();
     }
 
     protected static function booted(): void
@@ -62,6 +68,13 @@ class House extends Model
             return $this->floors_data;
         }
 
+        if (is_string($this->floors_data) && ! empty($this->floors_data)) {
+            $decoded = json_decode($this->floors_data, true);
+            if (is_array($decoded) && ! empty($decoded)) {
+                return $decoded;
+            }
+        }
+
         return static::defaultFloors();
     }
 
@@ -70,11 +83,33 @@ class House extends Model
      */
     public function getStairs(): array
     {
-        if (is_array($this->environment) && isset($this->environment['stairs']) && is_array($this->environment['stairs'])) {
-            return $this->environment['stairs'];
+        $env = $this->environment;
+        if (is_string($env) && ! empty($env)) {
+            $env = json_decode($env, true);
+        }
+
+        if (is_array($env) && isset($env['stairs']) && is_array($env['stairs'])) {
+            return $env['stairs'];
         }
 
         return static::defaultStairs();
+    }
+
+    /**
+     * Get elevators configured for the building.
+     */
+    public function getElevators(): array
+    {
+        $env = $this->environment;
+        if (is_string($env) && ! empty($env)) {
+            $env = json_decode($env, true);
+        }
+
+        if (is_array($env) && isset($env['elevators']) && is_array($env['elevators'])) {
+            return $env['elevators'];
+        }
+
+        return [];
     }
 
     /**

@@ -80,6 +80,7 @@ class HouseProjectController extends Controller
                 ],
                 'floors' => $house->getFloors(),
                 'stairs' => $house->getStairs(),
+                'elevators' => $house->getElevators(),
             ],
             'library' => $this->library->all(),
             'meta' => [
@@ -207,6 +208,7 @@ class HouseProjectController extends Controller
             'environment' => 'nullable|array',
             'floors' => 'nullable|array',
             'stairs' => 'nullable|array',
+            'elevators' => 'nullable|array',
         ]);
 
         if (isset($validated['title']) && $validated['title'] !== $house->title) {
@@ -236,11 +238,19 @@ class HouseProjectController extends Controller
             $env['stairs'] = $validated['stairs'];
             $house->environment = $env;
         }
-        if (isset($validated['floors'])) {
+        if (array_key_exists('elevators', $validated)) {
+            $env = $house->environment ?? [];
+            $env['elevators'] = $validated['elevators'];
+            $house->environment = $env;
+        }
+        if (! empty($validated['floors']) && is_array($validated['floors'])) {
             $house->floors_data = $validated['floors'];
+        } elseif (! empty($request->input('floors_data')) && is_array($request->input('floors_data'))) {
+            $house->floors_data = $request->input('floors_data');
         }
 
         $house->save();
+        $house->refresh();
 
         return response()->json([
             'message' => 'House saved successfully!',
@@ -256,6 +266,7 @@ class HouseProjectController extends Controller
                 'environment' => $house->environment,
                 'floors' => $house->getFloors(),
                 'stairs' => $house->getStairs(),
+                'elevators' => $house->getElevators(),
             ],
             'saved_at' => now()->toIso8601String(),
         ]);

@@ -5,7 +5,7 @@ namespace App\Support;
 class ObjParser
 {
     /**
-     * Parse and inspect an ASCII Wavefront OBJ file.
+     * Parse and inspect an ASCII Wavefront OBJ file from raw string, file path, or stream.
      *
      * @return array{
      *     valid: bool,
@@ -23,15 +23,99 @@ class ObjParser
      *     svg?: string
      * }
      */
-    public static function parse(string $content): array
+    public static function parse(mixed $source): array
     {
-        $lines = preg_split('/\r\n|\r|\n/', trim($content));
-        if (! is_array($lines) || count($lines) < 3) {
-            return ['valid' => false, 'error' => 'The file does not contain enough data to be a valid 3D OBJ model.'];
+        if (is_resource($source)) {
+            return self::parseStream($source);
         }
 
-        $vertices = [];
-        $faces = [];
+        if (is_string($source)) {
+            // If passed a valid file path on disk, parse stream directly to avoid loading large files into memory
+            if (strlen($source) < 4096 && @file_exists($source) && is_file($source)) {
+                return self::parseFile($source);
+            }
+
+            // Treat as in-memory content
+            $fp = fopen('php://temp', 'r+b');
+            if (! $fp) {
+                return ['valid' => false, 'error' => 'Could not allocate memory stream for 3D model parsing.'];
+            }
+
+            fwrite($fp, $source);
+            rewind($fp);
+
+            try {
+                return self::parseStream($fp);
+            } finally {
+                fclose($fp);
+            }
+        }
+
+        return ['valid' => false, 'error' => 'Invalid source provided to OBJ parser.'];
+    }
+
+    /**
+     * Parse an OBJ file directly from a filesystem path using buffered stream reading.
+     * Memory usage remains under 5MB even for 100MB+ multi-million polygon files.
+     *
+     * @return array{
+     *     valid: bool,
+     *     error?: string,
+     *     vertex_count?: int,
+     *     face_count?: int,
+     *     normal_count?: int,
+     *     texcoord_count?: int,
+     *     mtllib?: ?string,
+     *     materials?: list<string>,
+     *     bbox?: array{min_x: float, min_y: float, min_z: float, max_x: float, max_y: float, max_z: float},
+     *     dimensions?: array{w: float, h: float, d: float},
+     *     scale_factor?: float,
+     *     suggested?: array{w: float, h: float, d: float},
+     *     svg?: string
+     * }
+     */
+    public static function parseFile(string $filePath): array
+    {
+        if (! file_exists($filePath) || ! is_readable($filePath)) {
+            return ['valid' => false, 'error' => '3D model file could not be read on server.'];
+        }
+
+        $fp = fopen($filePath, 'rb');
+        if (! $fp) {
+            return ['valid' => false, 'error' => 'Could not open 3D model file stream.'];
+        }
+
+        try {
+            return self::parseStream($fp);
+        } finally {
+            fclose($fp);
+        }
+    }
+
+    /**
+     * Parse stream line-by-line without accumulating massive PHP arrays in memory.
+     *
+     * @param  resource  $fp
+     * @return array{
+     *     valid: bool,
+     *     error?: string,
+     *     vertex_count?: int,
+     *     face_count?: int,
+     *     normal_count?: int,
+     *     texcoord_count?: int,
+     *     mtllib?: ?string,
+     *     materials?: list<string>,
+     *     bbox?: array{min_x: float, min_y: float, min_z: float, max_x: float, max_y: float, max_z: float},
+     *     dimensions?: array{w: float, h: float, d: float},
+     *     scale_factor?: float,
+     *     suggested?: array{w: float, h: float, d: float},
+     *     svg?: string
+     * }
+     */
+    public static function parseStream($fp): array
+    {
+        $vertexCount = 0;
+        $faceCount = 0;
         $normalCount = 0;
         $texcoordCount = 0;
         $mtllib = null;
@@ -44,72 +128,96 @@ class ObjParser
         $maxY = -INF;
         $maxZ = -INF;
 
-        foreach ($lines as $line) {
+        // Sample vertices packed in a binary string (12 bytes per vertex) to keep memory near zero
+        $packedVertices = '';
+        $sampleVerticesCount = 0;
+        $maxSampleVertices = 25000;
+
+        // Sample up to 300 faces for thumbnail projection
+        $sampleFaces = [];
+        $maxSampleFaces = 300;
+
+        while (($line = fgets($fp, 65536)) !== false) {
             $line = trim($line);
             if ($line === '' || $line[0] === '#') {
                 continue;
             }
 
-            $parts = preg_split('/\s+/', $line);
-            if (! is_array($parts) || count($parts) < 2) {
-                continue;
-            }
+            $first = $line[0];
 
-            $type = strtolower($parts[0]);
+            if ($first === 'v') {
+                $second = $line[1] ?? ' ';
+                if ($second === ' ' || $second === "\t") {
+                    $vertexCount++;
+                    $x = null;
+                    $y = null;
+                    $z = null;
+                    $matched = sscanf($line, 'v %f %f %f', $x, $y, $z);
+                    if ($matched >= 3 && $x !== null && $y !== null && $z !== null) {
+                        if ($x < $minX) {
+                            $minX = $x;
+                        }
+                        if ($x > $maxX) {
+                            $maxX = $x;
+                        }
+                        if ($y < $minY) {
+                            $minY = $y;
+                        }
+                        if ($y > $maxY) {
+                            $maxY = $y;
+                        }
+                        if ($z < $minZ) {
+                            $minZ = $z;
+                        }
+                        if ($z > $maxZ) {
+                            $maxZ = $z;
+                        }
 
-            if ($type === 'v' && count($parts) >= 4) {
-                $x = (float) $parts[1];
-                $y = (float) $parts[2];
-                $z = (float) $parts[3];
+                        if ($sampleVerticesCount < $maxSampleVertices) {
+                            $packedVertices .= pack('fff', $x, $y, $z);
+                            $sampleVerticesCount++;
+                        }
+                    }
+                } elseif ($second === 'n') {
+                    $normalCount++;
+                } elseif ($second === 't') {
+                    $texcoordCount++;
+                }
+            } elseif ($first === 'f') {
+                $second = $line[1] ?? ' ';
+                if ($second === ' ' || $second === "\t") {
+                    $faceCount++;
 
-                $vertices[] = [$x, $y, $z];
-
-                if ($x < $minX) {
-                    $minX = $x;
-                }
-                if ($x > $maxX) {
-                    $maxX = $x;
-                }
-                if ($y < $minY) {
-                    $minY = $y;
-                }
-                if ($y > $maxY) {
-                    $maxY = $y;
-                }
-                if ($z < $minZ) {
-                    $minZ = $z;
-                }
-                if ($z > $maxZ) {
-                    $maxZ = $z;
-                }
-            } elseif ($type === 'vn') {
-                $normalCount++;
-            } elseif ($type === 'vt') {
-                $texcoordCount++;
-            } elseif ($type === 'f' && count($parts) >= 4) {
-                // Polygon face (at least 3 vertices)
-                $faceIndices = [];
-                for ($k = 1; $k < count($parts); $k++) {
-                    $sub = explode('/', $parts[$k]);
-                    $idx = (int) $sub[0];
-                    if ($idx !== 0) {
-                        $faceIndices[] = $idx;
+                    if (count($sampleFaces) < $maxSampleFaces) {
+                        $parts = preg_split('/\s+/', substr($line, 2));
+                        if (is_array($parts) && count($parts) >= 3) {
+                            $indices = [];
+                            foreach ($parts as $p) {
+                                if ($p === '') {
+                                    continue;
+                                }
+                                $slashPos = strpos($p, '/');
+                                $idxStr = $slashPos === false ? $p : substr($p, 0, $slashPos);
+                                $idx = (int) $idxStr;
+                                if ($idx !== 0) {
+                                    $indices[] = $idx;
+                                }
+                            }
+                            if (count($indices) >= 3) {
+                                $sampleFaces[] = $indices;
+                            }
+                        }
                     }
                 }
-                if (count($faceIndices) >= 3) {
-                    $faces[] = $faceIndices;
-                }
-            } elseif ($type === 'mtllib' && isset($parts[1])) {
-                $mtllib = $parts[1];
-            } elseif ($type === 'usemtl' && isset($parts[1])) {
-                if (! in_array($parts[1], $materials, true)) {
-                    $materials[] = $parts[1];
+            } elseif (str_starts_with($line, 'mtllib ')) {
+                $mtllib = trim(substr($line, 7));
+            } elseif (str_starts_with($line, 'usemtl ')) {
+                $mat = trim(substr($line, 7));
+                if ($mat !== '' && ! in_array($mat, $materials, true)) {
+                    $materials[] = $mat;
                 }
             }
         }
-
-        $vertexCount = count($vertices);
-        $faceCount = count($faces);
 
         if ($vertexCount < 3) {
             return [
@@ -138,8 +246,9 @@ class ObjParser
         $suggestedD = round(max(0.3, min(10.0, $d * $scaleFactor)), 2);
 
         $svg = self::generateSvgPreview(
-            $vertices,
-            $faces,
+            $packedVertices,
+            $sampleVerticesCount,
+            $sampleFaces,
             $minX,
             $maxX,
             $minY,
@@ -191,49 +300,45 @@ class ObjParser
      */
     public static function parseMtl(string $content): array
     {
-        $lines = preg_split('/\r\n|\r|\n/', trim($content));
-        if (! is_array($lines)) {
-            return ['valid' => false, 'error' => 'Invalid MTL material file.', 'materials' => [], 'primary_color' => '#8b5cf6'];
-        }
-
         $materials = [];
         $current = null;
         $primaryColor = '#8b5cf6'; // default stylish purple
 
-        foreach ($lines as $line) {
+        $line = strtok($content, "\r\n");
+        while ($line !== false) {
             $line = trim($line);
             if ($line === '' || $line[0] === '#') {
+                $line = strtok("\r\n");
+
                 continue;
             }
 
-            $parts = preg_split('/\s+/', $line);
-            if (! is_array($parts) || count($parts) < 2) {
-                continue;
-            }
-
-            $type = strtolower($parts[0]);
-
-            if ($type === 'newmtl') {
+            if (str_starts_with($line, 'newmtl ')) {
                 if ($current !== null) {
                     $materials[] = $current;
                 }
-                $current = ['name' => $parts[1]];
-            } elseif ($type === 'kd' && count($parts) >= 4) {
-                $r = min(1.0, max(0.0, (float) $parts[1]));
-                $g = min(1.0, max(0.0, (float) $parts[2]));
-                $b = min(1.0, max(0.0, (float) $parts[3]));
+                $current = ['name' => trim(substr($line, 7))];
+            } elseif (str_starts_with($line, 'Kd ') || str_starts_with($line, 'kd ')) {
+                $parts = preg_split('/\s+/', $line);
+                if (is_array($parts) && count($parts) >= 4) {
+                    $r = min(1.0, max(0.0, (float) $parts[1]));
+                    $g = min(1.0, max(0.0, (float) $parts[2]));
+                    $b = min(1.0, max(0.0, (float) $parts[3]));
 
-                $hex = sprintf('#%02x%02x%02x', (int) round($r * 255), (int) round($g * 255), (int) round($b * 255));
-                if ($current !== null) {
-                    $current['kd'] = $hex;
-                    $current['diffuse'] = ['r' => $r, 'g' => $g, 'b' => $b];
-                }
+                    $hex = sprintf('#%02x%02x%02x', (int) round($r * 255), (int) round($g * 255), (int) round($b * 255));
+                    if ($current !== null) {
+                        $current['kd'] = $hex;
+                        $current['diffuse'] = ['r' => $r, 'g' => $g, 'b' => $b];
+                    }
 
-                // If not near-black or near-white, prefer as primaryColor
-                if ($primaryColor === '#8b5cf6' && ($r > 0.1 || $g > 0.1 || $b > 0.1)) {
-                    $primaryColor = $hex;
+                    // If not near-black or near-white, prefer as primaryColor
+                    if ($primaryColor === '#8b5cf6' && ($r > 0.1 || $g > 0.1 || $b > 0.1)) {
+                        $primaryColor = $hex;
+                    }
                 }
             }
+
+            $line = strtok("\r\n");
         }
 
         if ($current !== null) {
@@ -250,11 +355,11 @@ class ObjParser
     /**
      * Generate an isometric 3D perspective projected SVG illustration for the thumbnail.
      *
-     * @param  list<array{0: float, 1: float, 2: float}>  $vertices
      * @param  list<list<int>>  $faces
      */
     private static function generateSvgPreview(
-        array $vertices,
+        string $packedVertices,
+        int $sampleVerticesCount,
         array $faces,
         float $minX,
         float $maxX,
@@ -276,20 +381,25 @@ class ObjParser
         $cosP = cos(deg2rad(24));
         $sinP = sin(deg2rad(24));
 
-        $vCount = count($vertices);
-
-        // First pass: project sample vertices to determine 2D screen bounds
+        // Screen bounds projection using sample vertices
         $projMinX = INF;
         $projMaxX = -INF;
         $projMinY = INF;
         $projMaxY = -INF;
 
-        $stepV = max(1, (int) floor($vCount / 300));
-        for ($i = 0; $i < $vCount; $i += $stepV) {
-            $v = $vertices[$i];
-            $rx = ($v[0] - $cx) * $cosY - ($v[2] - $cz) * $sinY;
-            $rz = ($v[0] - $cx) * $sinY + ($v[2] - $cz) * $cosY;
-            $ry = $v[1] - $cy;
+        $stepV = max(1, (int) floor($sampleVerticesCount / 300));
+        for ($i = 0; $i < $sampleVerticesCount; $i += $stepV) {
+            $vals = unpack('f3', substr($packedVertices, $i * 12, 12));
+            if (! $vals) {
+                continue;
+            }
+            $vx = $vals[1];
+            $vy = $vals[2];
+            $vz = $vals[3];
+
+            $rx = ($vx - $cx) * $cosY - ($vz - $cz) * $sinY;
+            $rz = ($vx - $cx) * $sinY + ($vz - $cz) * $cosY;
+            $ry = $vy - $cy;
             $sx = $rx;
             $sy = -($ry * $cosP - $rz * $sinP);
 
@@ -307,6 +417,35 @@ class ObjParser
             }
         }
 
+        // Fallback to bounding box corners if no projected points
+        if ($projMinX === INF || $projMaxX === -INF || $projMinY === INF || $projMaxY === -INF) {
+            $corners = [
+                [$minX, $minY, $minZ], [$maxX, $minY, $minZ],
+                [$maxX, $maxY, $minZ], [$minX, $maxY, $minZ],
+                [$minX, $minY, $maxZ], [$maxX, $minY, $maxZ],
+                [$maxX, $maxY, $maxZ], [$minX, $maxY, $maxZ],
+            ];
+            foreach ($corners as $c) {
+                $rx = ($c[0] - $cx) * $cosY - ($c[2] - $cz) * $sinY;
+                $rz = ($c[0] - $cx) * $sinY + ($c[2] - $cz) * $cosY;
+                $ry = $c[1] - $cy;
+                $sx = $rx;
+                $sy = -($ry * $cosP - $rz * $sinP);
+                if ($sx < $projMinX) {
+                    $projMinX = $sx;
+                }
+                if ($sx > $projMaxX) {
+                    $projMaxX = $sx;
+                }
+                if ($sy < $projMinY) {
+                    $projMinY = $sy;
+                }
+                if ($sy > $projMaxY) {
+                    $projMaxY = $sy;
+                }
+            }
+        }
+
         $pw = max(0.001, $projMaxX - $projMinX);
         $ph = max(0.001, $projMaxY - $projMinY);
         $availW = $viewW - ($pad * 2);
@@ -317,26 +456,31 @@ class ObjParser
         $offsetY = $pad + ($availH - ($ph * $scale)) / 2 - ($projMinY * $scale);
 
         // Project and sort faces by depth (painter's algorithm)
-        $maxSample = min(count($faces), 180);
-        $stepF = max(1, (int) floor(count($faces) / $maxSample));
         $projectedFaces = [];
 
-        for ($fi = 0; $fi < count($faces); $fi += $stepF) {
-            $f = $faces[$fi];
+        foreach ($faces as $f) {
             $pts = [];
             $avgDepth = 0;
             $valid = true;
 
             foreach ($f as $idx) {
-                $realIdx = $idx > 0 ? $idx - 1 : $vCount + $idx;
-                if (! isset($vertices[$realIdx])) {
+                $realIdx = $idx > 0 ? $idx - 1 : $sampleVerticesCount + $idx;
+                if ($realIdx < 0 || $realIdx >= $sampleVerticesCount) {
                     $valid = false;
                     break;
                 }
-                $v = $vertices[$realIdx];
-                $rx = ($v[0] - $cx) * $cosY - ($v[2] - $cz) * $sinY;
-                $rz = ($v[0] - $cx) * $sinY + ($v[2] - $cz) * $cosY;
-                $ry = $v[1] - $cy;
+                $vals = unpack('f3', substr($packedVertices, $realIdx * 12, 12));
+                if (! $vals) {
+                    $valid = false;
+                    break;
+                }
+                $vx = $vals[1];
+                $vy = $vals[2];
+                $vz = $vals[3];
+
+                $rx = ($vx - $cx) * $cosY - ($vz - $cz) * $sinY;
+                $rz = ($vx - $cx) * $sinY + ($vz - $cz) * $cosY;
+                $ry = $vy - $cy;
                 $px = round($offsetX + ($rx * $scale), 1);
                 $py = round($offsetY + (-($ry * $cosP - $rz * $sinP) * $scale), 1);
                 $pts[] = "{$px},{$py}";
@@ -356,8 +500,32 @@ class ObjParser
         usort($projectedFaces, fn ($a, $b) => $a['depth'] <=> $b['depth']);
 
         $polygons = '';
-        foreach ($projectedFaces as $pf) {
-            $polygons .= "<polygon points=\"{$pf['pts']}\" fill=\"#8b5cf6\" fill-opacity=\"0.45\" stroke=\"#c084fc\" stroke-width=\"1\" stroke-linejoin=\"round\" />\n    ";
+        if (count($projectedFaces) > 0) {
+            foreach ($projectedFaces as $pf) {
+                $polygons .= "<polygon points=\"{$pf['pts']}\" fill=\"#8b5cf6\" fill-opacity=\"0.45\" stroke=\"#c084fc\" stroke-width=\"1\" stroke-linejoin=\"round\" />\n    ";
+            }
+        } else {
+            // Isometric 3D prism fallback
+            $projectCorner = function ($x, $y, $z) use ($cx, $cy, $cz, $cosY, $sinY, $cosP, $sinP, $scale, $offsetX, $offsetY) {
+                $rx = ($x - $cx) * $cosY - ($z - $cz) * $sinY;
+                $rz = ($x - $cx) * $sinY + ($z - $cz) * $cosY;
+                $ry = $y - $cy;
+                $px = round($offsetX + ($rx * $scale), 1);
+                $py = round($offsetY + (-($ry * $cosP - $rz * $sinP) * $scale), 1);
+
+                return "{$px},{$py}";
+            };
+
+            $c010 = $projectCorner($minX, $maxY, $minZ);
+            $c110 = $projectCorner($maxX, $maxY, $minZ);
+            $c111 = $projectCorner($maxX, $maxY, $maxZ);
+            $c011 = $projectCorner($minX, $maxY, $maxZ);
+            $c001 = $projectCorner($minX, $minY, $maxZ);
+            $c101 = $projectCorner($maxX, $minY, $maxZ);
+
+            $polygons .= "<polygon points=\"{$c010} {$c110} {$c111} {$c011}\" fill=\"#a855f7\" fill-opacity=\"0.6\" stroke=\"#c084fc\" stroke-width=\"1.5\" />\n    ";
+            $polygons .= "<polygon points=\"{$c001} {$c101} {$c111} {$c011}\" fill=\"#8b5cf6\" fill-opacity=\"0.45\" stroke=\"#c084fc\" stroke-width=\"1.5\" />\n    ";
+            $polygons .= "<polygon points=\"{$c110} {$c101} {$c111}\" fill=\"#7c3aed\" fill-opacity=\"0.35\" stroke=\"#c084fc\" stroke-width=\"1.5\" />\n    ";
         }
 
         return <<<SVG

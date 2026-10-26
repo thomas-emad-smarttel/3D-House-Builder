@@ -20,11 +20,16 @@ export class Interactions {
 
     for (const it of world.interactables) {
       if (it.enabled && !it.enabled()) continue;
+      // Multi-floor height check: ignore doors/objects on other floors
+      if (it.y !== undefined) {
+        const dy = Math.abs(it.y - (player.y || 0));
+        if (dy > 2.2) continue;
+      }
       const dx = it.x - player.x; const dz = it.z - player.z;
       const dist = Math.hypot(dx, dz);
       const dot = dist > 0.001 ? (dx * f.x + dz * f.z) / dist : 1;
 
-      if (dist <= it.radius && (dist < 1 || dot >= SETTINGS.interact.facing)) {
+      if (dist <= it.radius && (dist < 0.8 || dot >= SETTINGS.interact.facing)) {
         const s = dot * 2 - dist * 0.35;
         if (s > bestScore) { bestScore = s; best = it; }
       }

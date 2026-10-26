@@ -132,7 +132,7 @@ export class Editor {
         plot_width: this.house.plot_width,
         plot_depth: this.house.plot_depth,
         environment: this.house.environment,
-        floors: this.house.floors,
+        floors: (this.house.floors && this.house.floors.length) ? this.house.floors : (this.house.floors_data || []),
         stairs: this.house.stairs || this.house.environment?.stairs || [],
       };
 
@@ -141,6 +141,7 @@ export class Editor {
         const returnedFloors = res.house.floors || res.house.floors_data;
         if (returnedFloors && Array.isArray(returnedFloors) && returnedFloors.length) {
           this.house.floors = returnedFloors;
+          this.house.floors_data = returnedFloors;
         }
         if (res.house.stairs) {
           this.house.stairs = res.house.stairs;
