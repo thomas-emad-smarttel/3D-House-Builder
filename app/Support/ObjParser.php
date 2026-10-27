@@ -137,6 +137,61 @@ class ObjParser
         $sampleFaces = [];
         $maxSampleFaces = 300;
 
+        // Sub-object decomposition tracking (o <name> and g <name>)
+        $subObjects = [];
+        $currentObjName = '';
+        $objMinX = INF;
+        $objMaxX = -INF;
+        $objMinY = INF;
+        $objMaxY = -INF;
+        $objMinZ = INF;
+        $objMaxZ = -INF;
+        $objVertexCount = 0;
+
+        $commitSubObject = function () use (
+            &$subObjects,
+            &$currentObjName,
+            &$objMinX,
+            &$objMaxX,
+            &$objMinY,
+            &$objMaxY,
+            &$objMinZ,
+            &$objMaxZ,
+            &$objVertexCount
+        ) {
+            if ($objVertexCount > 0 && $currentObjName !== '') {
+                $subObjects[] = [
+                    'name' => $currentObjName,
+                    'vertex_count' => $objVertexCount,
+                    'bbox' => [
+                        'min_x' => round($objMinX, 4),
+                        'min_y' => round($objMinY, 4),
+                        'min_z' => round($objMinZ, 4),
+                        'max_x' => round($objMaxX, 4),
+                        'max_y' => round($objMaxY, 4),
+                        'max_z' => round($objMaxZ, 4),
+                    ],
+                    'dimensions' => [
+                        'w' => round(max(0.001, $objMaxX - $objMinX), 4),
+                        'h' => round(max(0.001, $objMaxY - $objMinY), 4),
+                        'd' => round(max(0.001, $objMaxZ - $objMinZ), 4),
+                    ],
+                    'center' => [
+                        'x' => round(($objMinX + $objMaxX) / 2, 4),
+                        'y' => round(($objMinY + $objMaxY) / 2, 4),
+                        'z' => round(($objMinZ + $objMaxZ) / 2, 4),
+                    ],
+                ];
+            }
+            $objMinX = INF;
+            $objMaxX = -INF;
+            $objMinY = INF;
+            $objMaxY = -INF;
+            $objMinZ = INF;
+            $objMaxZ = -INF;
+            $objVertexCount = 0;
+        };
+
         while (($line = fgets($fp, 65536)) !== false) {
             $line = trim($line);
             if ($line === '' || $line[0] === '#') {
@@ -145,7 +200,13 @@ class ObjParser
 
             $first = $line[0];
 
-            if ($first === 'v') {
+            if ($first === 'o' || $first === 'g') {
+                $second = $line[1] ?? ' ';
+                if ($second === ' ' || $second === "\t") {
+                    $commitSubObject();
+                    $currentObjName = trim(substr($line, 2));
+                }
+            } elseif ($first === 'v') {
                 $second = $line[1] ?? ' ';
                 if ($second === ' ' || $second === "\t") {
                     $vertexCount++;
@@ -172,6 +233,27 @@ class ObjParser
                         if ($z > $maxZ) {
                             $maxZ = $z;
                         }
+
+                        // Track sub-object bounding box
+                        if ($x < $objMinX) {
+                            $objMinX = $x;
+                        }
+                        if ($x > $objMaxX) {
+                            $objMaxX = $x;
+                        }
+                        if ($y < $objMinY) {
+                            $objMinY = $y;
+                        }
+                        if ($y > $objMaxY) {
+                            $objMaxY = $y;
+                        }
+                        if ($z < $objMinZ) {
+                            $objMinZ = $z;
+                        }
+                        if ($z > $objMaxZ) {
+                            $objMaxZ = $z;
+                        }
+                        $objVertexCount++;
 
                         if ($sampleVerticesCount < $maxSampleVertices) {
                             $packedVertices .= pack('fff', $x, $y, $z);
@@ -218,6 +300,8 @@ class ObjParser
                 }
             }
         }
+
+        $commitSubObject();
 
         if ($vertexCount < 3) {
             return [
@@ -285,6 +369,7 @@ class ObjParser
                 'd' => $suggestedD,
             ],
             'svg' => $svg,
+            'sub_objects' => $subObjects,
         ];
     }
 

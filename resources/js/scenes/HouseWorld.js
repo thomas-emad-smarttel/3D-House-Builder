@@ -55,7 +55,9 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   // Stairs definition list (connects floors)
   const stairsList = (houseData.stairs && Array.isArray(houseData.stairs) && houseData.stairs.length)
     ? [...houseData.stairs]
-    : [];
+    : (env.stairs && Array.isArray(env.stairs) && env.stairs.length
+      ? [...env.stairs]
+      : []);
 
   const hasCadModel = !!(env.cad_model || houseData.cad_model);
 
@@ -187,7 +189,11 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   // 0. Load Imported 3D CAD Architectural House Model (if present)
   const cadModel = env.cad_model || houseData.cad_model;
   if (cadModel && cadModel.file_path) {
-    loadCadHouseModel(world, cadModel, { isDesigner: false });
+    loadCadHouseModel(world, cadModel, {
+      isDesigner: false,
+      houseData,
+      floors,
+    });
   }
 
 /**
@@ -487,6 +493,11 @@ function computeFloorWallDeduplication(rooms = []) {
         const ox = rx + (o.x || 0);
         const oz = rz + (o.z || 0);
         const clonedObj = { ...o, x: ox, y: elevation, z: oz };
+
+        // Decomposed CAD sub-objects are rendered directly with authentic geometry in CadModelLoader
+        if (o.is_cad_sub_object) {
+          continue;
+        }
 
         let fn = BUILDERS[o.type];
         let def = null;

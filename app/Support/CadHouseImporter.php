@@ -115,8 +115,11 @@ class CadHouseImporter
         $plotWidth = max(16.0, ceil($width + $padding * 2));
         $plotDepth = max(16.0, ceil($depth + $padding * 2));
 
-        // 5. Estimate stories and build floor layout
-        $floorsData = self::generateFloorsLayout($width, $depth, $height);
+        // Decompose sub-objects into discrete interactive items
+        $decomposed = self::classifySubObjects($inspection['sub_objects'] ?? [], $scaleFactor, $inspection['bbox'] ?? null);
+
+        // 5. Estimate stories and build floor layout with discrete decomposed items
+        $floorsData = self::generateFloorsLayout($width, $depth, $height, $decomposed);
 
         // 6. Environment styling presets
         $skyPreset = $params['sky_preset'] ?? 'daylight';
@@ -161,6 +164,7 @@ class CadHouseImporter
                 'sun_intensity' => 1.15,
                 'sky_color' => $skyColor,
                 'ground' => $groundPreset,
+                'stairs' => $decomposed['stairs'] ?? [],
                 'cad_model' => [
                     'format' => $ext,
                     'original_format' => $originalExt,
@@ -176,6 +180,7 @@ class CadHouseImporter
                     'bbox' => $inspection['bbox'] ?? null,
                     'vertex_count' => $inspection['vertex_count'] ?? 0,
                     'face_count' => $inspection['face_count'] ?? 0,
+                    'decomposed_objects_count' => count($decomposed['furniture']) + count($decomposed['lighting']) + count($decomposed['plants']),
                 ],
             ],
             'floors_data' => $floorsData,
@@ -219,6 +224,7 @@ class CadHouseImporter
                     'bbox' => $parsed['bbox'] ?? null,
                     'vertex_count' => $parsed['vertex_count'] ?? 0,
                     'face_count' => $parsed['face_count'] ?? 0,
+                    'sub_objects' => $parsed['sub_objects'] ?? [],
                 ];
             }
         }
@@ -382,18 +388,257 @@ class CadHouseImporter
     }
 
     /**
-     * Generate modular floors data for the imported house.
+     * Classify sub-objects into discrete interactive items (furniture, lighting, plants, doors, stairs).
      *
+     * @param  list<array<string, mixed>>  $subObjects
+     * @param  array{min_x: float, min_y: float, min_z: float, max_x: float, max_y: float, max_z: float}|null  $bbox
+     * @return array{
+     *     furniture: list<array<string, mixed>>,
+     *     lighting: list<array<string, mixed>>,
+     *     plants: list<array<string, mixed>>,
+     *     doors: list<array<string, mixed>>,
+     *     stairs: list<array<string, mixed>>,
+     * }
+     */
+    public static function classifySubObjects(array $subObjects, float $scaleFactor = 1.0, ?array $bbox = null): array
+    {
+        $furniture = [];
+        $lighting = [];
+        $plants = [];
+        $doors = [];
+        $stairs = [];
+
+        if (empty($subObjects)) {
+            return compact('furniture', 'lighting', 'plants', 'doors', 'stairs');
+        }
+
+        $centerX = $bbox ? ($bbox['min_x'] + $bbox['max_x']) / 2.0 : 0.0;
+        $centerZ = $bbox ? ($bbox['min_z'] + $bbox['max_z']) / 2.0 : 0.0;
+        $alignYZero = ($bbox && ($bbox['min_y'] ?? 0) < -0.1 && ($bbox['max_y'] ?? 0) > 0.1);
+        $baseY = $alignYZero ? 0.0 : (float) ($bbox['min_y'] ?? 0.0);
+
+        foreach ($subObjects as $obj) {
+            $name = (string) ($obj['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+
+            $rawCenterX = (float) ($obj['center']['x'] ?? 0.0);
+            $rawCenterY = (float) ($obj['center']['y'] ?? 0.0);
+            $rawCenterZ = (float) ($obj['center']['z'] ?? 0.0);
+
+            $rawW = (float) ($obj['dimensions']['w'] ?? 1.0);
+            $rawH = (float) ($obj['dimensions']['h'] ?? 1.0);
+            $rawD = (float) ($obj['dimensions']['d'] ?? 1.0);
+
+            $x = round(($rawCenterX - $centerX) * $scaleFactor, 2);
+            $z = round(($rawCenterZ - $centerZ) * $scaleFactor, 2);
+            $y = round(($rawCenterY - $baseY) * $scaleFactor, 2);
+
+            $w = max(0.1, round($rawW * $scaleFactor, 2));
+            $h = max(0.1, round($rawH * $scaleFactor, 2));
+            $d = max(0.1, round($rawD * $scaleFactor, 2));
+
+            $lname = strtolower($name);
+            $cleanId = 'cad-obj-'.Str::slug($name);
+
+            // 1. Entrance flights & stairs
+            if (str_contains($lname, 'stair') || str_contains($lname, 'step') || str_contains($lname, 'line008')) {
+                if ($w >= 0.8 && $h >= 0.15) {
+                    $stairs[] = [
+                        'id' => 'stairs-'.Str::slug($name),
+                        'name' => self::formatSubObjectLabel($name).' Steps',
+                        'startX' => $x,
+                        'startY' => max(0.0, round($y - $h / 2, 2)),
+                        'startZ' => round($z + $d / 2, 2),
+                        'endX' => $x,
+                        'endY' => max(0.45, round($y + $h / 2, 2)),
+                        'endZ' => round($z - $d / 2, 2),
+                        'width' => $w,
+                        'steps' => max(4, min(24, (int) round($h / 0.18))),
+                        'style' => 'stone_steps',
+                    ];
+
+                    continue;
+                }
+            }
+
+            // 2. Interactive Doors & Entrance Portals
+            if (str_contains($lname, 'door') || str_contains($lname, 'gate')) {
+                if ($w < 0.4 && $d < 0.4) {
+                    continue;
+                }
+                $doors[] = [
+                    'id' => 'cad-door-'.Str::slug($name),
+                    'mesh_name' => $name,
+                    'wall' => 'front',
+                    'label' => self::formatSubObjectLabel($name).' Door',
+                    'offset' => 0.0,
+                    'width' => max(0.9, $w),
+                    'height' => max(2.1, $h),
+                    'x' => $x,
+                    'z' => $z,
+                    'y' => $y,
+                ];
+
+                continue;
+            }
+
+            // 3. Exterior & Interior Lighting fixtures
+            if (str_contains($lname, 'streetlamp') || str_contains($lname, 'lamp') || str_contains($lname, 'lantern') || str_contains($lname, 'sconce') || str_contains($lname, 'chandelier')) {
+                $lighting[] = [
+                    'id' => $cleanId,
+                    'mesh_name' => $name,
+                    'type' => 'lamp',
+                    'label' => self::formatSubObjectLabel($name),
+                    'x' => $x,
+                    'z' => $z,
+                    'y' => $y,
+                    'rot' => 0,
+                    'width' => $w,
+                    'height' => $h,
+                    'depth' => $d,
+                    'is_cad_sub_object' => true,
+                ];
+
+                continue;
+            }
+
+            // 4. Foliage & Landscaping Plants
+            if (str_contains($lname, 'plant') || str_contains($lname, 'tree') || str_contains($lname, 'flower') || str_contains($lname, 'bush')) {
+                $plants[] = [
+                    'id' => $cleanId,
+                    'mesh_name' => $name,
+                    'type' => 'plant',
+                    'label' => self::formatSubObjectLabel($name),
+                    'x' => $x,
+                    'z' => $z,
+                    'y' => $y,
+                    'rot' => 0,
+                    'width' => $w,
+                    'height' => $h,
+                    'depth' => $d,
+                    'is_cad_sub_object' => true,
+                ];
+
+                continue;
+            }
+
+            // 5. Furniture & Movable Props (Tables, Chairs, Sofas, Beds, Desks)
+            $isFurniture = str_contains($lname, 'table') ||
+                str_contains($lname, 'chair') ||
+                str_contains($lname, 'sofa') ||
+                str_contains($lname, 'couch') ||
+                str_contains($lname, 'bed') ||
+                str_contains($lname, 'desk') ||
+                str_contains($lname, 'bench') ||
+                str_contains($lname, 'stool') ||
+                str_contains($lname, 'cabinet') ||
+                str_contains($lname, 'shelf') ||
+                str_contains($lname, 'wardrobe') ||
+                str_contains($lname, 'costa_') ||
+                str_contains($lname, 'ai37_');
+
+            if ($isFurniture) {
+                if ($w > 8.0 || $d > 8.0 || $h > 4.0) {
+                    continue;
+                }
+
+                $type = 'table';
+                if (str_contains($lname, 'sofa') || str_contains($lname, 'couch') || (str_contains($lname, 'chair') && ($w >= 1.3 || $d >= 1.3))) {
+                    $type = 'sofa';
+                } elseif (str_contains($lname, 'chair') || str_contains($lname, 'stool')) {
+                    $type = 'chair';
+                } elseif (str_contains($lname, 'bed')) {
+                    $type = 'bed';
+                } elseif (str_contains($lname, 'desk')) {
+                    $type = 'desk';
+                } elseif (str_contains($lname, 'cabinet') || str_contains($lname, 'shelf') || str_contains($lname, 'wardrobe')) {
+                    $type = 'cabinet';
+                }
+
+                $furniture[] = [
+                    'id' => $cleanId,
+                    'mesh_name' => $name,
+                    'type' => $type,
+                    'label' => self::formatSubObjectLabel($name),
+                    'x' => $x,
+                    'z' => $z,
+                    'y' => $y,
+                    'rot' => 0,
+                    'width' => $w,
+                    'height' => $h,
+                    'depth' => $d,
+                    'is_cad_sub_object' => true,
+                ];
+            }
+        }
+
+        return compact('furniture', 'lighting', 'plants', 'doors', 'stairs');
+    }
+
+    /**
+     * Format sub-object name into human-readable title.
+     */
+    public static function formatSubObjectLabel(string $name): string
+    {
+        $clean = preg_replace('/[_\-]+/', ' ', $name);
+        $clean = preg_replace('/\s+/', ' ', trim((string) $clean));
+        if (strtoupper($clean) === $clean) {
+            $clean = ucwords(strtolower($clean));
+        } else {
+            $clean = Str::headline($clean);
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Generate modular floors data for the imported house with discrete decomposed items.
+     *
+     * @param  array{
+     *     furniture?: list<array<string, mixed>>,
+     *     lighting?: list<array<string, mixed>>,
+     *     plants?: list<array<string, mixed>>,
+     *     doors?: list<array<string, mixed>>,
+     *     stairs?: list<array<string, mixed>>,
+     * }  $decomposed
      * @return list<array<string, mixed>>
      */
-    protected static function generateFloorsLayout(float $width, float $depth, float $height): array
+    protected static function generateFloorsLayout(float $width, float $depth, float $height, array $decomposed = []): array
     {
         $stories = max(1, min(6, (int) round($height / 3.4)));
         $floors = [];
 
+        $allItems = array_merge(
+            $decomposed['furniture'] ?? [],
+            $decomposed['lighting'] ?? [],
+            $decomposed['plants'] ?? []
+        );
+
         for ($lvl = 0; $lvl < $stories; $lvl++) {
             $elev = round($lvl * 3.4, 2);
             $floorName = $lvl === 0 ? 'Ground Level (Foundation)' : "Floor {$lvl} (Upper Level)";
+
+            // Filter decomposed items belonging to this vertical floor level
+            $floorObjects = array_values(array_filter($allItems, function ($item) use ($lvl, $stories) {
+                $itemY = (float) ($item['y'] ?? 0.0);
+                if ($lvl === 0) {
+                    return $itemY < 3.0 || $stories === 1;
+                }
+
+                return $itemY >= ($lvl * 3.4 - 0.5) && $itemY < (($lvl + 1) * 3.4);
+            }));
+
+            // Filter doors for this floor level
+            $floorDoors = array_values(array_filter($decomposed['doors'] ?? [], function ($door) use ($lvl) {
+                $doorY = (float) ($door['y'] ?? 0.0);
+                if ($lvl === 0) {
+                    return $doorY < 3.0;
+                }
+
+                return $doorY >= 3.0;
+            }));
 
             $floors[] = [
                 'id' => "cad-floor-{$lvl}",
@@ -419,9 +664,9 @@ class CadHouseImporter
                                 'light' => 'warm',
                                 'brightness' => 1.2,
                             ],
-                            'doors' => [],
+                            'doors' => $floorDoors,
                             'windows' => [],
-                            'objects' => [],
+                            'objects' => $floorObjects,
                         ],
                     ],
                 ],

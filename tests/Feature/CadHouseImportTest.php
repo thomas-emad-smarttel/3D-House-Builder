@@ -209,4 +209,78 @@ OBJ;
         $this->assertEquals(5.0, (float) $house->environment['cad_model']['dimensions']['h']);
         $this->assertEquals(16.0, (float) $house->environment['cad_model']['dimensions']['d']);
     }
+
+    public function test_decomposes_sub_objects_into_discrete_furniture_and_lighting(): void
+    {
+        $this->actingAs($this->admin());
+        Storage::fake('public');
+
+        // Sample OBJ model with architectural walls and discrete named sub-objects (furniture, lamp)
+        $objContent = <<<'OBJ'
+# Architectural House Model with Furnishings
+o 01_wall_white
+v 0 0 0
+v 12 0 0
+v 12 3.5 0
+v 0 3.5 0
+v 0 0 10
+v 12 0 10
+v 12 3.5 10
+v 0 3.5 10
+f 1 2 3 4
+f 5 6 7 8
+
+o Costa_Coffee_Table
+v 4.0 0.0 4.0
+v 6.0 0.0 4.0
+v 6.0 0.6 4.0
+v 4.0 0.6 4.0
+v 4.0 0.0 5.0
+v 6.0 0.0 5.0
+v 6.0 0.6 5.0
+v 4.0 0.6 5.0
+f 9 10 11 12
+f 13 14 15 16
+
+o StreetLamp_Garden
+v 1.0 0.0 8.0
+v 1.4 0.0 8.0
+v 1.4 3.0 8.0
+v 1.0 3.0 8.0
+v 1.0 0.0 8.4
+v 1.4 0.0 8.4
+v 1.4 3.0 8.4
+v 1.0 3.0 8.4
+f 17 18 19 20
+f 21 22 23 24
+OBJ;
+
+        $file = UploadedFile::fake()->createWithContent('furnished_villa.obj', $objContent);
+
+        $response = $this->postJson('/admin/houses/import-cad', [
+            'file' => $file,
+            'title' => 'Decomposed Furnished Villa',
+            'unit_scale' => 'm',
+        ]);
+
+        $response->assertCreated();
+        $house = House::where('title', 'Decomposed Furnished Villa')->first();
+        $this->assertNotNull($house);
+
+        $objects = $house->floors_data[0]['rooms'][0]['layout']['objects'] ?? [];
+        $this->assertNotEmpty($objects);
+
+        // Verify Costa Coffee Table is extracted as an editable small object
+        $table = collect($objects)->firstWhere('type', 'table');
+        $this->assertNotNull($table);
+        $this->assertEquals('cad-obj-costa-coffee-table', $table['id']);
+        $this->assertEquals('Costa Coffee Table', $table['label']);
+        $this->assertTrue($table['is_cad_sub_object']);
+
+        // Verify Street Lamp is extracted as an editable small object
+        $lamp = collect($objects)->firstWhere('type', 'lamp');
+        $this->assertNotNull($lamp);
+        $this->assertEquals('cad-obj-streetlamp-garden', $lamp['id']);
+        $this->assertTrue($lamp['is_cad_sub_object']);
+    }
 }

@@ -1719,7 +1719,7 @@ export class HouseBuilder3D {
         },
       },
         el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
-          el('strong', { style: { color: '#60a5fa', fontSize: '0.9rem' }, text: `Selected: ${selectedObj.type}` }),
+          el('strong', { style: { color: '#60a5fa', fontSize: '0.9rem' }, text: `Selected: ${selectedObj.label || selectedObj.type}` }),
           el('button', {
             type: 'button',
             class: 'btn btn-small',
@@ -1830,7 +1830,7 @@ export class HouseBuilder3D {
           ...objects.map((o) => {
             const isSelected = o.id === this.selectedObjectId;
             const def = typeDef(o.library_id || o.type);
-            const label = def?.name || o.name || o.type || 'Object';
+            const label = o.label || def?.name || o.name || o.type || 'Object';
             return el('div', {
               style: {
                 display: 'flex',

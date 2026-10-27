@@ -467,11 +467,12 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
 
       const isWideInX = (box.max.x - box.min.x) >= (box.max.z - box.min.z);
 
+      const scale = options.scale || 0.01;
       const interactItem = world.interact({
         x: dCenter.x,
         y: Math.max(1.4, dCenter.y),
         z: dCenter.z,
-        radius: 5.0, // Easily reachable from the top of the entrance steps and landing
+        radius: 5.5, // Reachable from top of entrance steps and landing
         cardRadius: 9.0,
         label: 'Press E to open entrance door',
         action: () => {
@@ -483,10 +484,10 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
             world.ctx.game.ui.hud.setPrompt(interactItem.label);
           }
 
-          // Smooth sliding double door opening animation
+          // Smooth sliding double door opening animation (accounting for CAD scale)
           const startTime = performance.now();
           const duration = 450;
-          const slideDist = 0.95;
+          const slideDist = 0.95 / scale;
 
           const animate = (now) => {
             const t = Math.min(1, (now - startTime) / duration);
@@ -494,11 +495,13 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
 
             for (const item of initialPositions) {
               const sign = item.isLeftLeaf ? -1 : 1;
-              const offset = (isOpen ? slideDist * sign : 0) * ease;
+              const currentOffset = isOpen
+                ? (slideDist * sign) * ease
+                : (slideDist * sign) * (1 - ease);
               if (isWideInX) {
-                item.mesh.position.x = item.x + offset;
+                item.mesh.position.x = item.x + currentOffset;
               } else {
-                item.mesh.position.z = item.z + offset;
+                item.mesh.position.z = item.z + currentOffset;
               }
             }
             if (t < 1) requestAnimationFrame(animate);
@@ -697,6 +700,31 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
       elevation: 0.45,
       voidZone: null,
     });
+
+    // 3. Upper level floor slab (Level 1 suite & gallery) at Y = 3.4m
+    world.floorSlabs.push({
+      minX: -10.5,
+      maxX: 16.5,
+      minZ: -35.0,
+      maxZ: 10.5,
+      elevation: 3.4,
+      voidZone: {
+        minX: 6.0,
+        maxX: 9.0,
+        minZ: -4.0,
+        maxZ: 2.5, // Open stairwell cutout for the foyer floating stairs
+      },
+    });
+
+    // 4. Roof terrace level at Y = 6.8m
+    world.floorSlabs.push({
+      minX: -10.5,
+      maxX: 16.5,
+      minZ: -35.0,
+      maxZ: 10.5,
+      elevation: 6.8,
+      voidZone: null,
+    });
   }
 
   // Register entrance steps so player smoothly climbs from Y=0.0 up to Y=0.45
@@ -733,12 +761,102 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
     world.scene.add(wrapper);
   }
 
+  // Extract discrete decomposed small objects (furniture, lighting, plants) into standalone meshes
+  // so each can be individually selected, moved via gizmo/sliders, or deleted in the 3D Builder
+  const floors = options.floors || world?.ctx?.data?.house?.floors_data || options.houseData?.floors_data || [];
+  const decomposedMap = new Map();
+
+  for (const f of floors) {
+    for (const r of (f.rooms || [])) {
+      for (const o of (r.layout?.objects || [])) {
+        if (o.mesh_name || o.is_cad_sub_object || (typeof o.id === 'string' && o.id.startsWith('cad-obj-'))) {
+          const key = (o.mesh_name || o.id.replace('cad-obj-', '')).toLowerCase();
+          decomposedMap.set(key, { ...o, roomId: r.id, floorId: f.id });
+        }
+      }
+    }
+  }
+
+  const extractedStandalones = [];
+
+  loadedObject.traverse((child) => {
+    if (!child.isMesh) return;
+    const rawName = child.name || '';
+    const lname = rawName.toLowerCase();
+
+    if (decomposedMap.has(lname)) {
+      const objData = decomposedMap.get(lname);
+
+      // Hide duplicate inside the monolithic architectural shell
+      child.visible = false;
+
+      if (objData.hidden || objData.visible === false) {
+        return;
+      }
+
+      try {
+        const geom = child.geometry.clone();
+        geom.center();
+        geom.scale(scale, scale, scale);
+        geom.computeVertexNormals();
+
+        const standalone = new THREE.Mesh(geom, child.material);
+        standalone.name = rawName;
+        standalone.position.set(
+          Number(objData.x) || 0,
+          Number(objData.y) || 0.45,
+          Number(objData.z) || 0
+        );
+        standalone.rotation.y = ((Number(objData.rot) || 0) * Math.PI) / 180;
+        standalone.castShadow = true;
+        standalone.receiveShadow = true;
+
+        standalone.userData.objectId = objData.id;
+        standalone.userData.roomId = objData.roomId;
+        standalone.userData.floorId = objData.floorId;
+        standalone.userData.isFurniture = true;
+        standalone.userData.isCadSubObject = true;
+
+        extractedStandalones.push({ id: objData.id, mesh: standalone, data: objData });
+      } catch (err) {
+        console.warn(`[3D CAD] Failed to extract standalone sub-mesh ${rawName}:`, err);
+        child.visible = true;
+      }
+    }
+  });
+
+  for (const item of extractedStandalones) {
+    if (world && world.scene) {
+      world.scene.add(item.mesh);
+    }
+    if (world && world.objects) {
+      world.objects.set(item.id, item.mesh);
+    }
+    // In game mode, register colliders for furniture objects
+    if (world && world.colliders && !options.isDesigner) {
+      const b = new THREE.Box3().setFromObject(item.mesh);
+      const bw = b.max.x - b.min.x;
+      const bd = b.max.z - b.min.z;
+      if (bw >= 0.5 && bd >= 0.5 && bw <= 4.0 && bd <= 4.0) {
+        world.colliders.push({
+          minX: b.min.x,
+          maxX: b.max.x,
+          minZ: b.min.z,
+          maxZ: b.max.z,
+          minY: b.min.y,
+          maxY: b.max.y,
+          enabled: true,
+        });
+      }
+    }
+  }
+
   // Force full matrix hierarchy calculation before collider extraction
   wrapper.updateMatrixWorld(true);
 
   // Setup real solid colliders (walls, glass, columns, railings) and interactive doors
   if (world && !options.isDesigner) {
-    setupCadCollidersAndDoors(world, wrapper, options);
+    setupCadCollidersAndDoors(world, wrapper, { ...options, scale });
   }
 
   // Spawn player on the driveway approach facing the entrance steps and front door
