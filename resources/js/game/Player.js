@@ -64,8 +64,14 @@ export class Player {
     const dx = this.vx * dt; const dz = this.vz * dt;
     const steps = Math.max(1, Math.min(4, Math.ceil(Math.hypot(dx, dz) / 0.25)));
     const playerY = this.y || 0;
-    const colliders = (world.colliders && world.colliders.length > 50)
-      ? world.colliders.filter((c) => c.enabled !== false && (c.minY === undefined || (playerY + 1.8 > c.minY && playerY - 0.2 < c.maxY)))
+    const px = this.x;
+    const pz = this.z;
+    const colliders = (world.colliders && world.colliders.length > 25)
+      ? world.colliders.filter((c) =>
+          c.enabled !== false &&
+          (c.minY === undefined || (playerY + 1.8 > c.minY && playerY - 0.2 < c.maxY)) &&
+          (c.minX === undefined || (px >= c.minX - 6.0 && px <= c.maxX + 6.0 && pz >= c.minZ - 6.0 && pz <= c.maxZ + 6.0))
+        )
       : world.colliders;
 
     for (let i = 0; i < steps; i++) {

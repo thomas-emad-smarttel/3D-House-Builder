@@ -52,15 +52,23 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 3. Ceilings & Underside of Roofs (prevents shadow acne / concentric moire bands)
-  if (allNames.includes('ceiling') || allNames.includes('roof') || allNames.includes('object2652')) {
+  // 3. Helper Ceilings & Temporary Reference Planes (Object2652 covers the open-air driveway)
+  if (allNames.includes('object2652')) {
+    mesh.visible = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    return;
+  }
+
+  // Real interior ceilings and roof undersides
+  if (allNames.includes('ceiling') || allNames.includes('roof')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#ffffff'),
       roughness: 0.85,
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = false;
     return;
   }
@@ -73,7 +81,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       roughness: 0.35,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -86,7 +94,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       roughness: 0.32,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = allNames.includes('09_metal_') || allNames.includes('06_metal_');
     mesh.receiveShadow = true;
     return;
   }
@@ -99,7 +107,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       metalness: 0.04,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = allNames.includes('pergola') || allNames.includes('louver');
     mesh.receiveShadow = true;
     return;
   }
@@ -140,7 +148,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       emissiveIntensity: 0.6,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -153,7 +161,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -166,7 +174,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -192,7 +200,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       metalness: 0.1,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -205,7 +213,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       roughness: 0.15,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -217,7 +225,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     metalness: 0.04,
     side: THREE.DoubleSide,
   });
-  mesh.castShadow = true;
+  mesh.castShadow = false;
   mesh.receiveShadow = true;
 }
 
@@ -327,15 +335,16 @@ function decomposeMeshToBoxes(mesh, worldMatrix) {
 /**
  * Builds solid colliders and sets up interactive doors for a CAD architectural model.
  */
-function setupCadCollidersAndDoors(world, loadedObject, options = {}) {
+function setupCadCollidersAndDoors(world, wrapper, options = {}) {
   if (!world || !world.colliders || options.isDesigner) return;
 
-  loadedObject.updateMatrixWorld(true);
+  // Force world matrix calculation so bounding boxes are in exact world-space meters
+  wrapper.updateMatrixWorld(true);
 
   const doorMeshes = [];
 
-  loadedObject.traverse((child) => {
-    if (!child.isMesh) return;
+  wrapper.traverse((child) => {
+    if (!child.isMesh || !child.visible) return;
 
     const lname = (child.name || '').toLowerCase();
     const parentName = (child.parent?.name || '').toLowerCase();
@@ -356,7 +365,8 @@ function setupCadCollidersAndDoors(world, loadedObject, options = {}) {
       allNames.includes('object041') ||
       allNames.includes('11_object006') ||
       allNames.includes('plane012') ||
-      allNames.includes('plane013')
+      allNames.includes('plane013') ||
+      allNames.includes('object2652')
     ) {
       return;
     }
@@ -367,18 +377,19 @@ function setupCadCollidersAndDoors(world, loadedObject, options = {}) {
     const h = box.max.y - box.min.y;
 
     if (box.min.y >= 2.5) return; // Ceiling / roof canopy
-    if (h < 0.35 && box.max.y <= 0.4) return; // Walkable flat slab / floor
+    if (h < 0.35 && box.max.y <= 0.45) return; // Walkable flat slab / floor
     if (w > 20 && d > 20 && h < 1.0) return; // Overall terrain plinth
 
-    // Check if this is a door
+    // Check if this is a door mesh
     if (allNames.includes('door') || allNames.includes('cgaxis_door') || allNames.includes('gate')) {
       doorMeshes.push({ mesh: child, box });
+      return;
     }
 
     const minDim = Math.min(w, d);
 
     // Individual wall, column, railing, glass window, table, post
-    if (minDim <= 1.8 && h >= 0.4 && box.min.y <= 1.8 && box.max.y >= 0.3) {
+    if (minDim <= 2.2 && h >= 0.4 && box.min.y <= 1.8 && box.max.y >= 0.3) {
       world.colliders.push({
         minX: box.min.x,
         maxX: box.max.x,
@@ -388,7 +399,7 @@ function setupCadCollidersAndDoors(world, loadedObject, options = {}) {
         maxY: box.max.y,
         enabled: true,
       });
-    } else if (minDim > 1.8) {
+    } else if (minDim > 2.2) {
       // Compound multi-wall meshes (01_wall_white, 02_wall_gray, 00_glass, etc.)
       const subBoxes = decomposeMeshToBoxes(child, child.matrixWorld);
       for (const sb of subBoxes) {
@@ -397,17 +408,32 @@ function setupCadCollidersAndDoors(world, loadedObject, options = {}) {
     }
   });
 
-  // Setup interactive doors
-  for (const { mesh, box } of doorMeshes) {
+  // Group door meshes that belong to the same doorway assembly
+  const doorAssemblies = [];
+  for (const item of doorMeshes) {
+    const center = new THREE.Vector3();
+    item.box.getCenter(center);
+    let found = doorAssemblies.find((a) => a.center.distanceTo(center) < 2.2);
+    if (!found) {
+      found = { center: center.clone(), box: item.box.clone(), parts: [] };
+      doorAssemblies.push(found);
+    }
+    found.box.union(item.box);
+    found.parts.push(item);
+  }
+
+  // Setup interactive doors and solid door colliders
+  for (const assembly of doorAssemblies) {
+    const box = assembly.box;
     const dCenter = new THREE.Vector3();
     box.getCenter(dCenter);
 
-    // Add dedicated door collider
+    // Solid door collider matching the doorway opening
     const doorCollider = {
-      minX: box.min.x,
-      maxX: box.max.x,
-      minZ: box.min.z,
-      maxZ: box.max.z,
+      minX: box.min.x - 0.08,
+      maxX: box.max.x + 0.08,
+      minZ: box.min.z - 0.12,
+      maxZ: box.max.z + 0.12,
       minY: box.min.y,
       maxY: box.max.y,
       enabled: true,
@@ -416,17 +442,22 @@ function setupCadCollidersAndDoors(world, loadedObject, options = {}) {
 
     if (typeof world.interact === 'function') {
       let isOpen = false;
-      const initialPosZ = mesh.position.z;
-      const initialPosX = mesh.position.x;
-      const isWideInX = (box.max.x - box.min.x) > (box.max.z - box.min.z);
+      const initialPositions = assembly.parts.map((p) => ({
+        mesh: p.mesh,
+        x: p.mesh.position.x,
+        z: p.mesh.position.z,
+        isLeftLeaf: p.box.min.x < dCenter.x,
+      }));
+
+      const isWideInX = (box.max.x - box.min.x) >= (box.max.z - box.min.z);
 
       const interactItem = world.interact({
         x: dCenter.x,
-        y: dCenter.y,
+        y: Math.max(1.4, dCenter.y),
         z: dCenter.z,
-        radius: 3.5,
-        cardRadius: 6.0,
-        label: 'Press E to open door',
+        radius: 4.2,
+        cardRadius: 8.0,
+        label: 'Press E to open entrance door',
         action: () => {
           isOpen = !isOpen;
           doorCollider.enabled = !isOpen;
@@ -436,18 +467,23 @@ function setupCadCollidersAndDoors(world, loadedObject, options = {}) {
             world.ctx.game.ui.hud.setPrompt(interactItem.label);
           }
 
-          // Smooth sliding/opening animation
+          // Smooth sliding double door opening animation
           const startTime = performance.now();
-          const duration = 400;
-          const slideOffset = 1.4;
+          const duration = 450;
+          const slideDist = 0.85;
 
           const animate = (now) => {
             const t = Math.min(1, (now - startTime) / duration);
             const ease = 1 - Math.pow(1 - t, 3);
-            if (isWideInX) {
-              mesh.position.x = initialPosX + (isOpen ? slideOffset : 0) * ease;
-            } else {
-              mesh.position.z = initialPosZ + (isOpen ? slideOffset : 0) * ease;
+
+            for (const item of initialPositions) {
+              const sign = item.isLeftLeaf ? -1 : 1;
+              const offset = (isOpen ? slideDist * sign : 0) * ease;
+              if (isWideInX) {
+                item.mesh.position.x = item.x + offset;
+              } else {
+                item.mesh.position.z = item.z + offset;
+              }
             }
             if (t < 1) requestAnimationFrame(animate);
           };
@@ -598,22 +634,25 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
     });
   }
 
-  // Setup real solid colliders (walls, glass, columns, railings) and interactive doors
-  if (world && !options.isDesigner) {
-    setupCadCollidersAndDoors(world, loadedObject, options);
-  }
-
-  // Adjust default player spawn location in the front entrance courtyard facing the villa
-  if (world && !options.isDesigner) {
-    world.spawn = {
-      x: 5.0,
-      z: 22.0,
-      yaw: Math.PI,
-    };
-  }
-
   if (world && world.scene) {
     world.scene.add(wrapper);
+  }
+
+  // Force full matrix hierarchy calculation before collider extraction
+  wrapper.updateMatrixWorld(true);
+
+  // Setup real solid colliders (walls, glass, columns, railings) and interactive doors
+  if (world && !options.isDesigner) {
+    setupCadCollidersAndDoors(world, wrapper, options);
+  }
+
+  // Adjust default player spawn location on the front approach facing the villa under open sky
+  if (world && !options.isDesigner) {
+    world.spawn = {
+      x: 0,
+      z: 24.0,
+      yaw: Math.PI,
+    };
   }
 
   if (typeof options.onLoaded === 'function') {
