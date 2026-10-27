@@ -87,25 +87,51 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   scene.fog = new THREE.Fog(skyColor, plotW * 1.5, plotW * 4.5);
 
   /* ------------------------------------------------------------- Lighting */
-  scene.add(new THREE.HemisphereLight(skyColor, '#3b432e', 0.85));
-  const sun = new THREE.DirectionalLight('#fff4e0', env.sun_intensity ?? 1.15);
-  sun.position.set(plotW * 0.7, 24, plotD * 0.8);
+  const hemiSky = hasCadModel ? '#f0f9ff' : skyColor;
+  const hemiGround = hasCadModel ? '#475569' : '#3b432e';
+  const hemiIntensity = hasCadModel ? 1.05 : 0.85;
+  scene.add(new THREE.HemisphereLight(hemiSky, hemiGround, hemiIntensity));
+
+  const sun = new THREE.DirectionalLight('#fff4e0', env.sun_intensity ?? (hasCadModel ? 1.25 : 1.15));
+  if (hasCadModel) {
+    sun.position.set(plotW * 0.45, 65, plotD * 0.45);
+  } else {
+    sun.position.set(plotW * 0.7, 24, plotD * 0.8);
+  }
   sun.castShadow = SETTINGS.render.shadows;
-  sun.shadow.mapSize.set(1024, 1024);
-  const camR = Math.max(plotW, plotD) * 0.9;
+  sun.shadow.mapSize.set(hasCadModel ? 2048 : 1024, hasCadModel ? 2048 : 1024);
+  const camR = Math.max(plotW, plotD) * (hasCadModel ? 0.8 : 0.9);
   Object.assign(sun.shadow.camera, {
     left: -camR,
     right: camR,
     top: camR,
     bottom: -camR,
     near: 1,
-    far: 80,
+    far: hasCadModel ? 250 : 80,
   });
   // Precision shadow bias and normal offset without shadow acne
-  sun.shadow.bias = -0.0001;
-  sun.shadow.normalBias = 0.02;
-  sun.shadow.radius = 1.2;
+  sun.shadow.bias = hasCadModel ? -0.0003 : -0.0001;
+  sun.shadow.normalBias = hasCadModel ? 0.04 : 0.02;
+  sun.shadow.radius = 1.0;
   scene.add(sun, sun.target);
+
+  if (hasCadModel) {
+    // Soft ambient bounce fill light for verandas, louvers, and interior clarity
+    scene.add(new THREE.AmbientLight('#ffffff', 0.42));
+
+    // Warm architectural interior accent lighting
+    const warmAmber = '#fef3c7';
+    const fillLights = [
+      { x: 10, y: 2.0, z: 5, intensity: 16, dist: 22 },
+      { x: 0, y: 2.0, z: -8, intensity: 20, dist: 25 },
+      { x: -5, y: 2.0, z: -20, intensity: 16, dist: 22 },
+    ];
+    for (const fl of fillLights) {
+      const pt = new THREE.PointLight(warmAmber, fl.intensity, fl.dist, 1.8);
+      pt.position.set(fl.x, fl.y, fl.z);
+      scene.add(pt);
+    }
+  }
 
   /* ------------------------------------------------ Exterior Ground Lawn */
   const grassMat = M.solid('#3d5a36', { rough: 0.95 });

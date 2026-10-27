@@ -6,7 +6,7 @@ import { M } from './materials.js';
 
 /**
  * Intelligent material resolver for architectural CAD models.
- * Automatically colors meshes based on object names and wirecolor materials (e.g. wire_RRRGGGBBB).
+ * Maps object and layer names to physically accurate luxury architectural materials.
  */
 function applySmartArchitecturalMaterial(mesh, options = {}) {
   if (options.isDesigner && options.wireframe) {
@@ -17,10 +17,10 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   const objName = (mesh.name || '').toLowerCase();
   const parentName = (mesh.parent?.name || '').toLowerCase();
   const matName = (mesh.material?.name || '').toLowerCase();
-  const allNames = `${objName} ${parentName}`;
+  const allNames = `${objName} ${parentName} ${matName}`;
 
   // 1. Transparent Architectural Glass (Windows, Balconies, Sliders)
-  if (allNames.includes('glass') || matName.includes('glass') || allNames.includes('glaz') || allNames.includes('window')) {
+  if (allNames.includes('glass') || allNames.includes('glaz') || allNames.includes('window')) {
     mesh.material = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color('#94bcd8'),
       metalness: 0.1,
@@ -28,7 +28,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       transmission: 0.88,
       thickness: 0.4,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.35,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
@@ -38,11 +38,11 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   // 2. Swimming Pool & Water
-  if (allNames.includes('water') || allNames.includes('pool') || matName.includes('water') || matName.includes('pool')) {
+  if (allNames.includes('water') || allNames.includes('pool') || allNames.includes('plane012') || allNames.includes('plane013')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#0284c7'),
-      roughness: 0.1,
-      metalness: 0.25,
+      roughness: 0.08,
+      metalness: 0.2,
       transparent: true,
       opacity: 0.8,
       side: THREE.DoubleSide,
@@ -52,11 +52,24 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 3. Dark Architectural Metal (Window frames, louvers, railings, structural beams)
-  if (allNames.includes('metal') || matName.includes('metal') || allNames.includes('frame') || allNames.includes('rail') || allNames.includes('iron') || allNames.includes('steel') || allNames.includes('black')) {
+  // 3. Ceilings & Underside of Roofs (prevents shadow acne / concentric moire bands)
+  if (allNames.includes('ceiling') || allNames.includes('roof') || allNames.includes('object2652')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#ffffff'),
+      roughness: 0.85,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = false;
+    return;
+  }
+
+  // 4. Doors & Entrance Panels
+  if (allNames.includes('door') || allNames.includes('cgaxis_door') || allNames.includes('entrance') || allNames.includes('gate')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#1e293b'),
-      metalness: 0.85,
+      metalness: 0.6,
       roughness: 0.35,
       side: THREE.DoubleSide,
     });
@@ -65,25 +78,12 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 4. White Plaster / Stucco Exterior Walls
-  if (allNames.includes('white') || matName.includes('white') || allNames.includes('stucco') || allNames.includes('plaster')) {
+  // 5. Dark Architectural Metal (Window frames, structural beams, railings, columns)
+  if (allNames.includes('metal') || allNames.includes('frame') || allNames.includes('rail') || allNames.includes('iron') || allNames.includes('steel') || allNames.includes('black') || allNames.includes('am107_087_black') || allNames.includes('mullion')) {
     mesh.material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#f8fafc'),
-      roughness: 0.8,
-      metalness: 0.02,
-      side: THREE.DoubleSide,
-    });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return;
-  }
-
-  // 5. Slate Gray Stone & Architectural Concrete Panels
-  if (allNames.includes('gray') || allNames.includes('grey') || allNames.includes('stone') || allNames.includes('concrete') || matName.includes('gray') || matName.includes('stone')) {
-    mesh.material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#64748b'),
-      roughness: 0.85,
-      metalness: 0.04,
+      color: new THREE.Color('#1e293b'),
+      metalness: 0.85,
+      roughness: 0.32,
       side: THREE.DoubleSide,
     });
     mesh.castShadow = true;
@@ -92,11 +92,11 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   // 6. Natural Warm Timber & Wood Louvers
-  if (allNames.includes('wood') || allNames.includes('timber') || allNames.includes('parquet') || allNames.includes('deck') || matName.includes('wood')) {
+  if (allNames.includes('wood') || allNames.includes('timber') || allNames.includes('deck') || allNames.includes('louver') || allNames.includes('slat') || allNames.includes('pergola') || allNames.includes('parquet')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#78350f'),
       roughness: 0.65,
-      metalness: 0.05,
+      metalness: 0.04,
       side: THREE.DoubleSide,
     });
     mesh.castShadow = true;
@@ -104,11 +104,65 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 7. Green Foliage / Plants / Trees
-  if (allNames.includes('plant') || allNames.includes('tree') || allNames.includes('leaf') || allNames.includes('grass') || allNames.includes('bush') || matName.includes('green')) {
+  // 7. Crisp White Plaster / Stucco Exterior Walls
+  if (allNames.includes('01_wall_white') || allNames.includes('wall_white') || allNames.includes('white') || allNames.includes('stucco') || allNames.includes('plaster')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#f8fafc'),
+      roughness: 0.78,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
+
+  // 8. Slate Gray Stone & Architectural Concrete Panels
+  if (allNames.includes('02_wall_gray') || allNames.includes('wall_gray') || allNames.includes('03_black_stone') || allNames.includes('stone') || allNames.includes('concrete') || allNames.includes('rock') || allNames.includes('slate') || allNames.includes('gray') || allNames.includes('grey')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#475569'),
+      roughness: 0.82,
+      metalness: 0.04,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
+
+  // 9. Streetlamps & Exterior Lighting fixtures
+  if (allNames.includes('streetlamp') || allNames.includes('lamp') || allNames.includes('light')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#0f172a'),
+      metalness: 0.9,
+      roughness: 0.25,
+      emissive: new THREE.Color('#fef08a'),
+      emissiveIntensity: 0.6,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
+
+  // 10. Sidewalks, Driveways, Curbs, and Pavers
+  if (allNames.includes('sidewalk') || allNames.includes('road') || allNames.includes('curb') || allNames.includes('pavement') || allNames.includes('paving') || allNames.includes('drainage') || allNames.includes('dranaige') || allNames.includes('box047')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#cbd5e1'),
+      roughness: 0.88,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
+
+  // 11. Green Foliage & Trees
+  if (allNames.includes('plant') || allNames.includes('tree') || allNames.includes('leaf') || allNames.includes('flower') || allNames.includes('bush') || allNames.includes('branch')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#15803d'),
-      roughness: 0.9,
+      roughness: 0.85,
       metalness: 0.0,
       side: THREE.DoubleSide,
     });
@@ -117,21 +171,25 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 8. 3ds Max Viewport Wirecolors (e.g. "wire_214228153" -> rgb(214, 228, 153))
-  const wireMatch = matName.match(/wire_(\d{3})(\d{3})(\d{3})/);
-  if (wireMatch) {
-    const r = parseInt(wireMatch[1], 10) / 255;
-    const g = parseInt(wireMatch[2], 10) / 255;
-    const b = parseInt(wireMatch[3], 10) / 255;
-
-    // Adjust pure black wire colors to deep architectural charcoal
-    const isPureBlack = r === 0 && g === 0 && b === 0;
-    const finalColor = isPureBlack ? new THREE.Color('#1e293b') : new THREE.Color(r, g, b);
-
+  // 12. Lawn Grass & Ground Terrain
+  if (allNames.includes('grass') || allNames.includes('lawn') || allNames.includes('garden') || allNames.includes('box043')) {
     mesh.material = new THREE.MeshStandardMaterial({
-      color: finalColor,
+      color: new THREE.Color('#2d5a27'),
+      roughness: 0.95,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    return;
+  }
+
+  // 13. Furniture & Props (Chairs, Tables, Sofas)
+  if (allNames.includes('chair') || allNames.includes('table') || allNames.includes('sofa') || allNames.includes('kitchentable') || allNames.includes('ai37_') || allNames.includes('costa_')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#334155'),
       roughness: 0.7,
-      metalness: isPureBlack ? 0.7 : 0.08,
+      metalness: 0.1,
       side: THREE.DoubleSide,
     });
     mesh.castShadow = true;
@@ -139,15 +197,265 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 9. Standard Clean Architectural Stucco
+  // 14. Polished Chrome / Silver Hardware
+  if (allNames.includes('silver') || allNames.includes('chrome') || allNames.includes('handle')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#e2e8f0'),
+      metalness: 0.95,
+      roughness: 0.15,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
+
+  // 15. Standard Clean Architectural Stucco (Default fallback)
   mesh.material = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#e2e8f0'),
     roughness: 0.75,
-    metalness: 0.05,
+    metalness: 0.04,
     side: THREE.DoubleSide,
   });
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+}
+
+/**
+ * Decomposes a multi-wall compound mesh BufferGeometry into separate connected box colliders.
+ */
+function decomposeMeshToBoxes(mesh, worldMatrix) {
+  const geo = mesh.geometry;
+  if (!geo || !geo.attributes || !geo.attributes.position) return [];
+  const pos = geo.attributes.position;
+  const count = pos.count;
+  if (count > 8000) return []; // avoid extremely dense meshes
+
+  const index = geo.index;
+  const numTris = index ? index.count / 3 : count / 3;
+  if (numTris > 2500) return [];
+
+  // Group triangles sharing vertices
+  const getVertexKey = (idx) => {
+    const vx = Math.round(pos.getX(idx) * 40);
+    const vy = Math.round(pos.getY(idx) * 40);
+    const vz = Math.round(pos.getZ(idx) * 40);
+    return `${vx}_${vy}_${vz}`;
+  };
+
+  const v2f = new Map();
+  for (let f = 0; f < numTris; f++) {
+    for (let k = 0; k < 3; k++) {
+      const vi = index ? index.getX(f * 3 + k) : f * 3 + k;
+      const key = getVertexKey(vi);
+      let arr = v2f.get(key);
+      if (!arr) {
+        arr = [];
+        v2f.set(key, arr);
+      }
+      arr.push(f);
+    }
+  }
+
+  const parent = new Int32Array(numTris);
+  for (let i = 0; i < numTris; i++) parent[i] = i;
+  const find = (i) => {
+    while (i !== parent[i]) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  };
+  const union = (i, j) => {
+    const ri = find(i);
+    const rj = find(j);
+    if (ri !== rj) parent[ri] = rj;
+  };
+
+  for (const flist of v2f.values()) {
+    const first = flist[0];
+    for (let k = 1; k < flist.length; k++) {
+      union(first, flist[k]);
+    }
+  }
+
+  const groups = new Map();
+  for (let f = 0; f < numTris; f++) {
+    const root = find(f);
+    let g = groups.get(root);
+    if (!g) {
+      g = [];
+      groups.set(root, g);
+    }
+    g.push(f);
+  }
+
+  const vLocal = new THREE.Vector3();
+  const boxes = [];
+
+  for (const flist of groups.values()) {
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+
+    for (const f of flist) {
+      for (let k = 0; k < 3; k++) {
+        const vi = index ? index.getX(f * 3 + k) : f * 3 + k;
+        vLocal.set(pos.getX(vi), pos.getY(vi), pos.getZ(vi));
+        vLocal.applyMatrix4(worldMatrix);
+
+        if (vLocal.x < minX) minX = vLocal.x; if (vLocal.x > maxX) maxX = vLocal.x;
+        if (vLocal.y < minY) minY = vLocal.y; if (vLocal.y > maxY) maxY = vLocal.y;
+        if (vLocal.z < minZ) minZ = vLocal.z; if (vLocal.z > maxZ) maxZ = vLocal.z;
+      }
+    }
+
+    const w = maxX - minX;
+    const d = maxZ - minZ;
+    const h = maxY - minY;
+
+    if (minY < 2.5 && h >= 0.4 && minY <= 1.8 && maxY >= 0.3) {
+      if (Math.min(w, d) <= 2.2) {
+        boxes.push({ minX, maxX, minZ, maxZ, minY, maxY, enabled: true });
+      }
+    }
+  }
+
+  return boxes;
+}
+
+/**
+ * Builds solid colliders and sets up interactive doors for a CAD architectural model.
+ */
+function setupCadCollidersAndDoors(world, loadedObject, options = {}) {
+  if (!world || !world.colliders || options.isDesigner) return;
+
+  loadedObject.updateMatrixWorld(true);
+
+  const doorMeshes = [];
+
+  loadedObject.traverse((child) => {
+    if (!child.isMesh) return;
+
+    const lname = (child.name || '').toLowerCase();
+    const parentName = (child.parent?.name || '').toLowerCase();
+    const allNames = `${lname} ${parentName}`;
+
+    // Skip walkable ground, grass, water, ceilings, small props
+    if (
+      allNames.includes('ground') ||
+      allNames.includes('grass') ||
+      allNames.includes('water') ||
+      allNames.includes('pool') ||
+      allNames.includes('sidewalk') ||
+      allNames.includes('lawn') ||
+      allNames.includes('road') ||
+      allNames.includes('street') ||
+      allNames.includes('curb') ||
+      allNames.includes('box043') ||
+      allNames.includes('object041') ||
+      allNames.includes('11_object006') ||
+      allNames.includes('plane012') ||
+      allNames.includes('plane013')
+    ) {
+      return;
+    }
+
+    const box = new THREE.Box3().setFromObject(child);
+    const w = box.max.x - box.min.x;
+    const d = box.max.z - box.min.z;
+    const h = box.max.y - box.min.y;
+
+    if (box.min.y >= 2.5) return; // Ceiling / roof canopy
+    if (h < 0.35 && box.max.y <= 0.4) return; // Walkable flat slab / floor
+    if (w > 20 && d > 20 && h < 1.0) return; // Overall terrain plinth
+
+    // Check if this is a door
+    if (allNames.includes('door') || allNames.includes('cgaxis_door') || allNames.includes('gate')) {
+      doorMeshes.push({ mesh: child, box });
+    }
+
+    const minDim = Math.min(w, d);
+
+    // Individual wall, column, railing, glass window, table, post
+    if (minDim <= 1.8 && h >= 0.4 && box.min.y <= 1.8 && box.max.y >= 0.3) {
+      world.colliders.push({
+        minX: box.min.x,
+        maxX: box.max.x,
+        minZ: box.min.z,
+        maxZ: box.max.z,
+        minY: box.min.y,
+        maxY: box.max.y,
+        enabled: true,
+      });
+    } else if (minDim > 1.8) {
+      // Compound multi-wall meshes (01_wall_white, 02_wall_gray, 00_glass, etc.)
+      const subBoxes = decomposeMeshToBoxes(child, child.matrixWorld);
+      for (const sb of subBoxes) {
+        world.colliders.push(sb);
+      }
+    }
+  });
+
+  // Setup interactive doors
+  for (const { mesh, box } of doorMeshes) {
+    const dCenter = new THREE.Vector3();
+    box.getCenter(dCenter);
+
+    // Add dedicated door collider
+    const doorCollider = {
+      minX: box.min.x,
+      maxX: box.max.x,
+      minZ: box.min.z,
+      maxZ: box.max.z,
+      minY: box.min.y,
+      maxY: box.max.y,
+      enabled: true,
+    };
+    world.colliders.push(doorCollider);
+
+    if (typeof world.interact === 'function') {
+      let isOpen = false;
+      const initialPosZ = mesh.position.z;
+      const initialPosX = mesh.position.x;
+      const isWideInX = (box.max.x - box.min.x) > (box.max.z - box.min.z);
+
+      const interactItem = world.interact({
+        x: dCenter.x,
+        y: dCenter.y,
+        z: dCenter.z,
+        radius: 3.5,
+        cardRadius: 6.0,
+        label: 'Press E to open door',
+        action: () => {
+          isOpen = !isOpen;
+          doorCollider.enabled = !isOpen;
+
+          interactItem.label = isOpen ? 'Press E to close door' : 'Press E to open door';
+          if (world.ctx?.game?.interactions?.current === interactItem) {
+            world.ctx.game.ui.hud.setPrompt(interactItem.label);
+          }
+
+          // Smooth sliding/opening animation
+          const startTime = performance.now();
+          const duration = 400;
+          const slideOffset = 1.4;
+
+          const animate = (now) => {
+            const t = Math.min(1, (now - startTime) / duration);
+            const ease = 1 - Math.pow(1 - t, 3);
+            if (isWideInX) {
+              mesh.position.x = initialPosX + (isOpen ? slideOffset : 0) * ease;
+            } else {
+              mesh.position.z = initialPosZ + (isOpen ? slideOffset : 0) * ease;
+            }
+            if (t < 1) requestAnimationFrame(animate);
+          };
+          requestAnimationFrame(animate);
+        },
+      });
+    }
+  }
 }
 
 /**
@@ -290,12 +598,16 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
     });
   }
 
-  // Adjust default player spawn location just outside the front facade facing the entrance
+  // Setup real solid colliders (walls, glass, columns, railings) and interactive doors
   if (world && !options.isDesigner) {
-    const frontZ = modelDepth / 2 + 6.0;
+    setupCadCollidersAndDoors(world, loadedObject, options);
+  }
+
+  // Adjust default player spawn location in the front entrance courtyard facing the villa
+  if (world && !options.isDesigner) {
     world.spawn = {
-      x: 0,
-      z: Math.min(frontZ, (world.bounds?.maxZ || 80) - 2),
+      x: 5.0,
+      z: 22.0,
       yaw: Math.PI,
     };
   }
