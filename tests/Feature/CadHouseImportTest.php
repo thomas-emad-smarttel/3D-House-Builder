@@ -46,7 +46,7 @@ class CadHouseImportTest extends TestCase
 
         $response->assertUnprocessable();
         $response->assertJsonFragment([
-            'message' => "Unsupported CAD format '.pdf'. Supported formats: obj, glb, gltf, dxf",
+            'message' => "Unsupported CAD format '.pdf'. Supported formats: obj, glb, gltf, dxf, max, zip, rar",
         ]);
     }
 
@@ -161,5 +161,52 @@ OBJ;
         $this->assertEquals(15.0, (float) $house->environment['cad_model']['dimensions']['w']);
         $this->assertEquals(3.5, (float) $house->environment['cad_model']['dimensions']['h']);
         $this->assertEquals(12.0, (float) $house->environment['cad_model']['dimensions']['d']);
+    }
+
+    public function test_handles_max_file_with_helpful_advice_when_converter_not_configured(): void
+    {
+        $this->actingAs($this->admin());
+        Storage::fake('public');
+
+        $maxFile = UploadedFile::fake()->create('villa.max', 1024, 'application/octet-stream');
+
+        $response = $this->postJson('/admin/houses/import-cad', [
+            'file' => $maxFile,
+            'title' => 'Luxury Villa 3ds Max',
+        ]);
+
+        $response->assertUnprocessable();
+        $this->assertStringContainsString('Autodesk 3ds Max (.max) is a proprietary binary project format', $response->json('message'));
+        $this->assertStringContainsString('Wavefront OBJ', $response->json('message'));
+    }
+
+    public function test_can_import_zip_archive_containing_obj_house(): void
+    {
+        $this->actingAs($this->admin());
+        Storage::fake('public');
+
+        // Create temporary zip archive
+        $tempZip = tempnam(sys_get_temp_dir(), 'test_cad_zip_').'.zip';
+        $zip = new \ZipArchive;
+        $zip->open($tempZip, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $zip->addFromString('mansion.obj', "v 0 0 0\nv 20 0 0\nv 20 5 0\nv 0 5 0\nv 0 0 16\nv 20 0 16\nv 20 5 16\nv 0 5 16\nf 1 2 3 4\n");
+        $zip->addFromString('mansion.mtl', "newmtl StoneWall\nKd 0.8 0.8 0.8\n");
+        $zip->close();
+
+        $zipFile = new UploadedFile($tempZip, 'mansion_pack.zip', 'application/zip', null, true);
+
+        $response = $this->postJson('/admin/houses/import-cad', [
+            'file' => $zipFile,
+            'title' => 'Archmodel Mansion Pack',
+        ]);
+
+        @unlink($tempZip);
+
+        $response->assertCreated();
+        $house = House::where('title', 'Archmodel Mansion Pack')->first();
+        $this->assertNotNull($house);
+        $this->assertEquals(20.0, (float) $house->environment['cad_model']['dimensions']['w']);
+        $this->assertEquals(5.0, (float) $house->environment['cad_model']['dimensions']['h']);
+        $this->assertEquals(16.0, (float) $house->environment['cad_model']['dimensions']['d']);
     }
 }

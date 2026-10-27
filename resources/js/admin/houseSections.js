@@ -338,7 +338,7 @@ function openImportCadHouseModal(ed) {
 
   const fileInput = el('input', {
     type: 'file',
-    accept: '.obj,.glb,.gltf,.dxf',
+    accept: '.obj,.glb,.gltf,.dxf,.max,.zip,.rar',
     style: { display: 'none' },
   });
 
@@ -396,7 +396,7 @@ function openImportCadHouseModal(ed) {
   const fileLabel = el('div', {
     class: 'hint',
     style: { marginTop: '6px', fontWeight: '500', color: '#93c5fd' },
-    text: 'Click or drag & drop .OBJ, .GLB, .GLTF, or .DXF CAD model',
+    text: 'Click or drag & drop .OBJ, .GLB, .GLTF, .DXF, .MAX, or .ZIP/.RAR CAD model',
   });
 
   const dropzone = el('div', {
@@ -431,7 +431,7 @@ function openImportCadHouseModal(ed) {
   },
     el('div', { style: { fontSize: '2rem', marginBottom: '8px' }, text: '📐' }),
     fileLabel,
-    el('p', { class: 'hint', style: { margin: '4px 0 0', fontSize: '0.8rem' }, text: 'Supports full 3D house designs exported from AutoCAD, SketchUp, Revit, Blender, or Rhino.' }),
+    el('p', { class: 'hint', style: { margin: '4px 0 0', fontSize: '0.8rem' }, text: 'Supports 3D house designs exported from Autodesk 3ds Max (.max), AutoCAD, SketchUp, Revit, Blender, or Rhino.' }),
   );
 
   const mtlSection = el('div', {
@@ -467,6 +467,16 @@ function openImportCadHouseModal(ed) {
       mtlSection.style.display = 'block';
     } else {
       mtlSection.style.display = 'none';
+    }
+
+    if (ext === 'max') {
+      fileLabel.innerHTML += `<div style="margin-top:6px;font-size:0.85rem;color:#fde047;background:rgba(234,179,8,0.15);padding:6px 10px;border-radius:6px;border:1px solid rgba(234,179,8,0.3)">
+        ⚡ <strong>Autodesk 3ds Max (.max) file detected:</strong> The system will automatically convert it via the server converter or inspect companion 3D exports.
+      </div>`;
+    } else if (ext === 'zip' || ext === 'rar') {
+      fileLabel.innerHTML += `<div style="margin-top:6px;font-size:0.85rem;color:#67e8f9;background:rgba(6,182,212,0.15);padding:6px 10px;border-radius:6px;border:1px solid rgba(6,182,212,0.3)">
+        📦 <strong>3D Archive package:</strong> Any enclosed .OBJ, .GLB, or .MTL house geometry and materials will be extracted automatically.
+      </div>`;
     }
   };
 

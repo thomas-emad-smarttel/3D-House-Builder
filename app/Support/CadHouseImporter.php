@@ -6,10 +6,11 @@ use App\Models\House;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use ZipArchive;
 
 class CadHouseImporter
 {
-    public const SUPPORTED_EXTENSIONS = ['obj', 'glb', 'gltf', 'dxf'];
+    public const SUPPORTED_EXTENSIONS = ['obj', 'glb', 'gltf', 'dxf', 'max', 'zip', 'rar'];
 
     /**
      * Import a 3D CAD architectural model and generate a complete House project.
@@ -39,25 +40,57 @@ class CadHouseImporter
             throw new \InvalidArgumentException("Unsupported CAD format '.{$ext}'. Supported formats: ".implode(', ', self::SUPPORTED_EXTENSIONS));
         }
 
+        $originalExt = $ext;
         $origName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
         $title = trim($params['title'] ?? '') ?: Str::headline($origName);
         $description = trim($params['description'] ?? '');
 
-        // 1. Store the primary 3D CAD file
+        // 1. Process and store 3D CAD geometry
         $storageDisk = 'public';
         $subFolder = 'houses/cad';
-        $hashName = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, '')).'.'.$ext;
-        $storedPath = $file->storeAs($subFolder, $hashName, $storageDisk);
-        $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
-
-        // 2. Store companion MTL file if provided
         $storedMtlPath = null;
-        if (isset($params['mtl_file']) && $params['mtl_file'] instanceof UploadedFile) {
-            $mtlFile = $params['mtl_file'];
-            $mtlExt = strtolower($mtlFile->getClientOriginalExtension() ?: $mtlFile->extension());
-            if ($mtlExt === 'mtl') {
-                $mtlHashName = Str::random(16).'_'.Str::slug(Str::limit(pathinfo($mtlFile->getClientOriginalName(), PATHINFO_FILENAME), 30, '')).'.mtl';
-                $storedMtlPath = $mtlFile->storeAs($subFolder, $mtlHashName, $storageDisk);
+
+        if ($ext === 'zip') {
+            $zipResult = self::extractZipArchive($file->getRealPath(), $subFolder, $storageDisk, $origName);
+            if (! $zipResult['success']) {
+                throw new \InvalidArgumentException($zipResult['error']);
+            }
+            $storedPath = $zipResult['stored_path'];
+            $storedMtlPath = $zipResult['stored_mtl_path'] ?? null;
+            $ext = $zipResult['ext'];
+            $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
+        } elseif ($ext === 'rar') {
+            $rarResult = self::extractRarArchive($file->getRealPath(), $subFolder, $storageDisk, $origName);
+            if (! $rarResult['success']) {
+                throw new \InvalidArgumentException($rarResult['error']);
+            }
+            $storedPath = $rarResult['stored_path'];
+            $storedMtlPath = $rarResult['stored_mtl_path'] ?? null;
+            $ext = $rarResult['ext'];
+            $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
+        } elseif ($ext === 'max') {
+            $maxResult = self::processMaxFile($file, $subFolder, $storageDisk, $origName);
+            if (! $maxResult['success']) {
+                throw new \InvalidArgumentException($maxResult['error']);
+            }
+            $storedPath = $maxResult['stored_path'];
+            $storedMtlPath = $maxResult['stored_mtl_path'] ?? null;
+            $ext = $maxResult['ext'];
+            $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
+        } else {
+            // Direct 3D CAD format (obj, glb, gltf, dxf)
+            $hashName = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, '')).'.'.$ext;
+            $storedPath = $file->storeAs($subFolder, $hashName, $storageDisk);
+            $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
+
+            // Store companion MTL file if provided
+            if (isset($params['mtl_file']) && $params['mtl_file'] instanceof UploadedFile) {
+                $mtlFile = $params['mtl_file'];
+                $mtlExt = strtolower($mtlFile->getClientOriginalExtension() ?: $mtlFile->extension());
+                if ($mtlExt === 'mtl') {
+                    $mtlHashName = Str::random(16).'_'.Str::slug(Str::limit(pathinfo($mtlFile->getClientOriginalName(), PATHINFO_FILENAME), 30, '')).'.mtl';
+                    $storedMtlPath = $mtlFile->storeAs($subFolder, $mtlHashName, $storageDisk);
+                }
             }
         }
 
@@ -130,6 +163,7 @@ class CadHouseImporter
                 'ground' => $groundPreset,
                 'cad_model' => [
                     'format' => $ext,
+                    'original_format' => $originalExt,
                     'file_path' => Storage::disk($storageDisk)->url($storedPath),
                     'mtl_path' => $storedMtlPath ? Storage::disk($storageDisk)->url($storedMtlPath) : null,
                     'filename' => $origName.'.'.$ext,
@@ -152,6 +186,7 @@ class CadHouseImporter
             'house' => $house,
             'details' => [
                 'format' => $ext,
+                'original_format' => $originalExt,
                 'width' => $width,
                 'height' => $height,
                 'depth' => $depth,
@@ -415,5 +450,197 @@ class CadHouseImporter
         }
 
         return $floors;
+    }
+
+    /**
+     * Process standalone Autodesk 3ds Max (.max) file via converter or provide detailed export advice.
+     *
+     * @return array{success: bool, error?: string, stored_path?: string, stored_mtl_path?: ?string, ext?: string}
+     */
+    protected static function processMaxFile(UploadedFile $file, string $subFolder, string $storageDisk, string $origName): array
+    {
+        $realPath = $file->getRealPath();
+        $content = @file_get_contents($realPath) ?: '';
+        $processed = MaxFormatAdapter::process($content, $realPath);
+
+        if ($processed['valid'] && ! empty($processed['obj_content'])) {
+            $hashBase = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, ''));
+            $objPath = "{$subFolder}/{$hashBase}.obj";
+            Storage::disk($storageDisk)->put($objPath, $processed['obj_content']);
+
+            $mtlPath = null;
+            if (! empty($processed['mtl_content'])) {
+                $mtlPath = "{$subFolder}/{$hashBase}.mtl";
+                Storage::disk($storageDisk)->put($mtlPath, $processed['mtl_content']);
+            }
+
+            return [
+                'success' => true,
+                'stored_path' => $objPath,
+                'stored_mtl_path' => $mtlPath,
+                'ext' => 'obj',
+            ];
+        }
+
+        $errorMsg = $processed['error'] ?? 'Autodesk 3ds Max (.max) is a proprietary binary project format that cannot be rendered directly in WebGL without conversion.';
+        $advice = $processed['advice'] ?? "In 3ds Max: Select File -> Export -> Export..., choose type 'Wavefront Object (*.OBJ)' or 'glTF / GLB', ensure materials are included, then upload the exported 3D model or a .ZIP archive.";
+
+        return [
+            'success' => false,
+            'error' => "{$errorMsg} {$advice}",
+        ];
+    }
+
+    /**
+     * Extract 3D models and materials from a ZIP archive.
+     *
+     * @return array{success: bool, error?: string, stored_path?: string, stored_mtl_path?: ?string, ext?: string}
+     */
+    protected static function extractZipArchive(string $zipFilePath, string $subFolder, string $storageDisk, string $origName): array
+    {
+        if (! class_exists(ZipArchive::class)) {
+            return ['success' => false, 'error' => 'PHP ZipArchive extension is not enabled on this server.'];
+        }
+
+        $zip = new ZipArchive;
+        if ($zip->open($zipFilePath) !== true) {
+            return ['success' => false, 'error' => 'Could not open ZIP archive file.'];
+        }
+
+        $modelIndex = -1;
+        $modelExt = null;
+        $mtlIndex = -1;
+        $maxIndex = -1;
+
+        $targetExts = ['obj', 'glb', 'gltf', 'dxf'];
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $entry = $zip->getNameIndex($i);
+            if (! $entry || str_ends_with($entry, '/')) {
+                continue;
+            }
+            $eExt = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
+            if ($modelIndex === -1 && in_array($eExt, $targetExts, true)) {
+                $modelIndex = $i;
+                $modelExt = $eExt;
+            } elseif ($eExt === 'mtl' && $mtlIndex === -1) {
+                $mtlIndex = $i;
+            } elseif ($eExt === 'max' && $maxIndex === -1) {
+                $maxIndex = $i;
+            }
+        }
+
+        if ($modelIndex !== -1) {
+            $content = $zip->getFromIndex($modelIndex);
+            $hashBase = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, ''));
+            $modelPath = "{$subFolder}/{$hashBase}.{$modelExt}";
+            Storage::disk($storageDisk)->put($modelPath, $content);
+
+            $storedMtlPath = null;
+            if ($mtlIndex !== -1) {
+                $mtlContent = $zip->getFromIndex($mtlIndex);
+                if ($mtlContent) {
+                    $storedMtlPath = "{$subFolder}/{$hashBase}.mtl";
+                    Storage::disk($storageDisk)->put($storedMtlPath, $mtlContent);
+                }
+            }
+
+            $zip->close();
+
+            return [
+                'success' => true,
+                'stored_path' => $modelPath,
+                'stored_mtl_path' => $storedMtlPath,
+                'ext' => $modelExt,
+            ];
+        }
+
+        if ($maxIndex !== -1) {
+            $maxContent = $zip->getFromIndex($maxIndex);
+            $zip->close();
+
+            $tempMax = sys_get_temp_dir().DIRECTORY_SEPARATOR.uniqid('zip_max_', true).'.max';
+            file_put_contents($tempMax, $maxContent);
+            $converted = MaxFormatAdapter::process($maxContent, $tempMax);
+            @unlink($tempMax);
+
+            if ($converted['valid'] && ! empty($converted['obj_content'])) {
+                $hashBase = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, ''));
+                $objPath = "{$subFolder}/{$hashBase}.obj";
+                Storage::disk($storageDisk)->put($objPath, $converted['obj_content']);
+
+                $storedMtlPath = null;
+                if (! empty($converted['mtl_content'])) {
+                    $storedMtlPath = "{$subFolder}/{$hashBase}.mtl";
+                    Storage::disk($storageDisk)->put($storedMtlPath, $converted['mtl_content']);
+                }
+
+                return [
+                    'success' => true,
+                    'stored_path' => $objPath,
+                    'stored_mtl_path' => $storedMtlPath,
+                    'ext' => 'obj',
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => 'The ZIP archive contains an Autodesk 3ds Max (.max) file without companion OBJ/glTF geometry. Export your model from 3ds Max as OBJ (.obj + .mtl) or glTF, or configure MAX_CONVERTER_PATH on your server.',
+            ];
+        }
+
+        $zip->close();
+
+        return [
+            'success' => false,
+            'error' => 'No supported 3D model found inside the ZIP archive. Archive must contain an .obj, .glb, .gltf, .dxf, or converted .max file.',
+        ];
+    }
+
+    /**
+     * Extract 3D models and materials from a RAR archive.
+     *
+     * @return array{success: bool, error?: string, stored_path?: string, stored_mtl_path?: ?string, ext?: string}
+     */
+    protected static function extractRarArchive(string $rarFilePath, string $subFolder, string $storageDisk, string $origName): array
+    {
+        $extracted = RarExtractor::extract($rarFilePath);
+        if (! $extracted['success']) {
+            return [
+                'success' => false,
+                'error' => $extracted['error'] ?? 'Could not extract RAR archive.',
+            ];
+        }
+
+        if (! empty($extracted['obj_content'])) {
+            $hashBase = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, ''));
+            $objPath = "{$subFolder}/{$hashBase}.obj";
+            Storage::disk($storageDisk)->put($objPath, $extracted['obj_content']);
+
+            $storedMtlPath = null;
+            if (! empty($extracted['mtl_content'])) {
+                $storedMtlPath = "{$subFolder}/{$hashBase}.mtl";
+                Storage::disk($storageDisk)->put($storedMtlPath, $extracted['mtl_content']);
+            }
+
+            return [
+                'success' => true,
+                'stored_path' => $objPath,
+                'stored_mtl_path' => $storedMtlPath,
+                'ext' => 'obj',
+            ];
+        }
+
+        if (! empty($extracted['has_max'])) {
+            return [
+                'success' => false,
+                'error' => 'The RAR archive contains an Autodesk 3ds Max (.max) file without companion OBJ geometry. Please export from 3ds Max as Wavefront OBJ (.obj + .mtl) or glTF before uploading.',
+            ];
+        }
+
+        return [
+            'success' => false,
+            'error' => 'No supported 3D model found inside the RAR archive. Archive must contain an .obj model.',
+        ];
     }
 }

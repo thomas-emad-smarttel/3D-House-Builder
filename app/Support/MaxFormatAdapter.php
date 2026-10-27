@@ -19,7 +19,8 @@ class MaxFormatAdapter
     public static function process(string $fileContent, ?string $filePath = null): array
     {
         $converter = env('MAX_CONVERTER_PATH');
-        if ($converter && is_executable($converter) && $filePath && file_exists($filePath)) {
+        $isExecutable = $converter && (is_executable($converter) || (PHP_OS_FAMILY === 'Windows' && file_exists($converter)));
+        if ($isExecutable && $filePath && file_exists($filePath)) {
             $tempOut = sys_get_temp_dir().DIRECTORY_SEPARATOR.uniqid('max_conv_', true).'.obj';
             $cmd = escapeshellcmd($converter).' '.escapeshellarg($filePath).' '.escapeshellarg($tempOut);
             exec($cmd, $output, $returnCode);
