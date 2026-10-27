@@ -21,19 +21,17 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
 
   // 1. Transparent Architectural Glass (Windows, Balconies, Sliders)
   if (allNames.includes('glass') || allNames.includes('glaz') || allNames.includes('window')) {
-    mesh.material = new THREE.MeshPhysicalMaterial({
+    mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#94bcd8'),
-      metalness: 0.1,
+      metalness: 0.2,
       roughness: 0.05,
-      transmission: 0.88,
-      thickness: 0.4,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.4,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
     mesh.castShadow = false;
-    mesh.receiveShadow = true;
+    mesh.receiveShadow = false;
     return;
   }
 
@@ -99,15 +97,15 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 6. Natural Warm Timber & Wood Louvers
-  if (allNames.includes('wood') || allNames.includes('timber') || allNames.includes('deck') || allNames.includes('louver') || allNames.includes('slat') || allNames.includes('pergola') || allNames.includes('parquet')) {
+  // 6. Natural Warm Timber & Wood Louvers (Plane017 pool deck, pergolas, louvers)
+  if (allNames.includes('wood') || allNames.includes('timber') || allNames.includes('deck') || allNames.includes('louver') || allNames.includes('slat') || allNames.includes('pergola') || allNames.includes('parquet') || allNames.includes('plane017')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#78350f'),
       roughness: 0.65,
       metalness: 0.04,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = allNames.includes('pergola') || allNames.includes('louver');
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -120,7 +118,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -133,7 +131,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
       metalness: 0.04,
       side: THREE.DoubleSide,
     });
-    mesh.castShadow = true;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     return;
   }
@@ -153,11 +151,11 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 10. Sidewalks, Driveways, Curbs, and Pavers
-  if (allNames.includes('sidewalk') || allNames.includes('road') || allNames.includes('curb') || allNames.includes('pavement') || allNames.includes('paving') || allNames.includes('drainage') || allNames.includes('dranaige') || allNames.includes('box047')) {
+  // 10. Sidewalks, Driveways, Curbs, and Pavers (Object041, Sidewalk_, drainage, road, pavement)
+  if (allNames.includes('sidewalk') || allNames.includes('object041') || allNames.includes('road') || allNames.includes('curb') || allNames.includes('pavement') || allNames.includes('paving') || allNames.includes('drainage') || allNames.includes('dranaige') || allNames.includes('box047') || allNames.includes('box021')) {
     mesh.material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#cbd5e1'),
-      roughness: 0.88,
+      color: new THREE.Color('#94a3b8'), // Realistic slate/stone pavers, NOT bleached white!
+      roughness: 0.85,
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
@@ -179,8 +177,8 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 12. Lawn Grass & Ground Terrain
-  if (allNames.includes('grass') || allNames.includes('lawn') || allNames.includes('garden') || allNames.includes('box043')) {
+  // 12. Lawn Grass & Ground Terrain (Object011, Box043, grass, lawn, garden)
+  if (allNames.includes('object011') || allNames.includes('box043') || allNames.includes('grass') || allNames.includes('lawn') || allNames.includes('garden')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#2d5a27'),
       roughness: 0.95,
@@ -646,12 +644,12 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
     setupCadCollidersAndDoors(world, wrapper, options);
   }
 
-  // Adjust default player spawn location on the front approach facing the villa under open sky
+  // Spawn player right in front of the grand entrance doors looking towards the doors
   if (world && !options.isDesigner) {
     world.spawn = {
-      x: 0,
-      z: 24.0,
-      yaw: Math.PI,
+      x: 10.54,
+      z: 6.5,
+      yaw: 0, // Faces towards -Z directly at the entrance doors at Z = 2.94!
     };
   }
 

@@ -54,12 +54,27 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
 
   // Stairs definition list (connects floors)
   const stairsList = (houseData.stairs && Array.isArray(houseData.stairs) && houseData.stairs.length)
-    ? houseData.stairs
+    ? [...houseData.stairs]
     : [];
 
   const hasCadModel = !!(env.cad_model || houseData.cad_model);
 
-  if (!stairsList.length && floors.length > 1 && !hasCadModel) {
+  if (hasCadModel && !stairsList.length) {
+    // Grand foyer floating staircase inside the entrance gallery connecting to the upper level
+    stairsList.push({
+      id: 'stairs-foyer',
+      name: 'Grand Foyer Floating Stairs',
+      style: 'floating_wood',
+      startX: 7.5,
+      startY: 0.0,
+      startZ: 1.5,
+      endX: 7.5,
+      endY: 3.4,
+      endZ: -3.5,
+      width: 1.6,
+      steps: 18,
+    });
+  } else if (!stairsList.length && floors.length > 1 && !hasCadModel) {
     const fl0 = floors.find((f) => f.level === 0) || floors[0];
     const fl1 = floors.find((f) => f.level === 1) || floors[1];
     if (fl0 && fl1) {
@@ -87,18 +102,19 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   scene.fog = new THREE.Fog(skyColor, plotW * 1.5, plotW * 4.5);
 
   /* ------------------------------------------------------------- Lighting */
-  const hemiSky = hasCadModel ? '#f0f9ff' : skyColor;
-  const hemiGround = hasCadModel ? '#475569' : '#3b432e';
-  const hemiIntensity = hasCadModel ? 1.15 : 0.85;
+  const hemiSky = hasCadModel ? '#cfe8fc' : skyColor;
+  const hemiGround = hasCadModel ? '#334155' : '#3b432e';
+  const hemiIntensity = hasCadModel ? 0.65 : 0.85;
   scene.add(new THREE.HemisphereLight(hemiSky, hemiGround, hemiIntensity));
 
-  const sun = new THREE.DirectionalLight('#fff4e0', env.sun_intensity ?? (hasCadModel ? 1.25 : 1.15));
+  const sun = new THREE.DirectionalLight('#fff4e0', env.sun_intensity ?? (hasCadModel ? 0.85 : 1.15));
   if (hasCadModel) {
     sun.position.set(plotW * 0.45, 65, plotD * 0.45);
   } else {
     sun.position.set(plotW * 0.7, 24, plotD * 0.8);
   }
-  sun.castShadow = SETTINGS.render.shadows;
+  // For massive 1.34M triangle CAD models, disable heavy shadow pass to guarantee 60+ FPS
+  sun.castShadow = hasCadModel ? false : SETTINGS.render.shadows;
   sun.shadow.mapSize.set(1024, 1024);
   const camR = Math.max(plotW, plotD) * (hasCadModel ? 0.8 : 0.9);
   Object.assign(sun.shadow.camera, {
@@ -116,8 +132,8 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   scene.add(sun, sun.target);
 
   if (hasCadModel) {
-    // Pure GPU ambient fill light for effortless 60+ FPS performance without vertex light loops
-    scene.add(new THREE.AmbientLight('#ffffff', 0.65));
+    // Pure GPU ambient fill light for balanced contrast without bleached overexposure
+    scene.add(new THREE.AmbientLight('#ffffff', 0.28));
   }
 
   /* ------------------------------------------------ Exterior Ground Lawn */
