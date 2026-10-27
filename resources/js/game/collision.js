@@ -75,6 +75,7 @@ export function resolveStairCollisions(p, radius, stairs) {
   const py = p.y || 0;
 
   for (const s of stairs) {
+    if (s.style === 'stone_steps' || s.noBalustrade) continue; // Wide outdoor entrance steps have no side railings
     const run = s.run || Math.hypot(s.dx, s.dz) || 0.001;
     const ux = s.ux ?? (s.dx / run);
     const uz = s.uz ?? (s.dz / run);

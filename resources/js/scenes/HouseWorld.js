@@ -66,7 +66,7 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
       name: 'Grand Foyer Floating Stairs',
       style: 'floating_wood',
       startX: 7.5,
-      startY: 0.0,
+      startY: 0.45,
       startZ: 1.5,
       endX: 7.5,
       endY: 3.4,

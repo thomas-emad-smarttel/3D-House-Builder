@@ -348,7 +348,7 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     const parentName = (child.parent?.name || '').toLowerCase();
     const allNames = `${lname} ${parentName}`;
 
-    // Skip walkable ground, grass, water, ceilings, small props
+    // Skip walkable ground, grass, water, ceilings, small props, interior slabs, entrance steps
     if (
       allNames.includes('ground') ||
       allNames.includes('grass') ||
@@ -364,7 +364,11 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
       allNames.includes('11_object006') ||
       allNames.includes('plane012') ||
       allNames.includes('plane013') ||
-      allNames.includes('object2652')
+      allNames.includes('object2652') ||
+      allNames.includes('object2667') || // Interior floor slab at Y = 0.45m
+      allNames.includes('line008') ||    // Grand entrance flight steps
+      allNames.includes('steps') ||
+      allNames.includes('stair')
     ) {
       return;
     }
@@ -375,11 +379,19 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     const h = box.max.y - box.min.y;
 
     if (box.min.y >= 2.5) return; // Ceiling / roof canopy
-    if (h < 0.35 && box.max.y <= 0.45) return; // Walkable flat slab / floor
+    if (h <= 0.55 && box.min.y <= 0.05 && box.max.y <= 0.55) return; // Walkable flat slab / porch plinth / low steps
     if (w > 20 && d > 20 && h < 1.0) return; // Overall terrain plinth
 
-    // Check if this is a door mesh
-    if (allNames.includes('door') || allNames.includes('cgaxis_door') || allNames.includes('gate')) {
+    // Check if this is a door mesh, leaf, handle, or casing
+    const isDoor =
+      allNames.includes('door') ||
+      allNames.includes('cgaxis_door') ||
+      allNames.includes('gate') ||
+      lname === 'object2659' || // Left entrance double door leaf
+      lname === 'box318' ||     // Right door handle
+      lname === 'object027';    // Entrance door frame threshold
+
+    if (isDoor) {
       doorMeshes.push({ mesh: child, box });
       return;
     }
@@ -411,7 +423,7 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
   for (const item of doorMeshes) {
     const center = new THREE.Vector3();
     item.box.getCenter(center);
-    let found = doorAssemblies.find((a) => a.center.distanceTo(center) < 2.2);
+    let found = doorAssemblies.find((a) => a.center.distanceTo(center) < 2.6);
     if (!found) {
       found = { center: center.clone(), box: item.box.clone(), parts: [] };
       doorAssemblies.push(found);
@@ -430,8 +442,8 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     const doorCollider = {
       minX: box.min.x - 0.08,
       maxX: box.max.x + 0.08,
-      minZ: box.min.z - 0.12,
-      maxZ: box.max.z + 0.12,
+      minZ: box.min.z - 0.15,
+      maxZ: box.max.z + 0.15,
       minY: box.min.y,
       maxY: box.max.y,
       enabled: true,
@@ -440,12 +452,18 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
 
     if (typeof world.interact === 'function') {
       let isOpen = false;
-      const initialPositions = assembly.parts.map((p) => ({
-        mesh: p.mesh,
-        x: p.mesh.position.x,
-        z: p.mesh.position.z,
-        isLeftLeaf: p.box.min.x < dCenter.x,
-      }));
+      const initialPositions = assembly.parts
+        .filter((p) => {
+          const nm = (p.mesh.name || '').toLowerCase();
+          // Keep outer door frame and threshold casing static
+          return !nm.includes('38_2') && !nm.includes('027');
+        })
+        .map((p) => ({
+          mesh: p.mesh,
+          x: p.mesh.position.x,
+          z: p.mesh.position.z,
+          isLeftLeaf: p.box.min.x < dCenter.x,
+        }));
 
       const isWideInX = (box.max.x - box.min.x) >= (box.max.z - box.min.z);
 
@@ -453,8 +471,8 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
         x: dCenter.x,
         y: Math.max(1.4, dCenter.y),
         z: dCenter.z,
-        radius: 4.2,
-        cardRadius: 8.0,
+        radius: 5.0, // Easily reachable from the top of the entrance steps and landing
+        cardRadius: 9.0,
         label: 'Press E to open entrance door',
         action: () => {
           isOpen = !isOpen;
@@ -468,7 +486,7 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
           // Smooth sliding double door opening animation
           const startTime = performance.now();
           const duration = 450;
-          const slideDist = 0.85;
+          const slideDist = 0.95;
 
           const animate = (now) => {
             const t = Math.min(1, (now - startTime) / duration);
@@ -658,8 +676,9 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
   const modelDepth = size.z * scale;
   const modelHeight = size.y * scale;
 
-  // Solid floor slab collider for walking physics inside and around the CAD house
+  // Solid floor slab colliders for walking physics inside and around the CAD house
   if (world && world.floorSlabs && !options.isDesigner) {
+    // 1. Overall ground / driveway / garden lawn level at Y = 0.0m
     world.floorSlabs.push({
       minX: -modelWidth / 2 - 8.0,
       maxX: modelWidth / 2 + 8.0,
@@ -668,6 +687,46 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
       elevation: 0.0,
       voidZone: null,
     });
+
+    // 2. Raised architectural villa plinth & porch floor (Object2667) at Y = 0.45m
+    world.floorSlabs.push({
+      minX: -10.5,
+      maxX: 16.5,
+      minZ: -35.0,
+      maxZ: 13.5,
+      elevation: 0.45,
+      voidZone: null,
+    });
+  }
+
+  // Register entrance steps so player smoothly climbs from Y=0.0 up to Y=0.45
+  if (world && world.stairs && !options.isDesigner) {
+    const hasEntranceStairs = world.stairs.some((s) => s.id === 'stairs-entrance');
+    if (!hasEntranceStairs) {
+      world.stairs.push({
+        id: 'stairs-entrance',
+        name: 'Grand Entrance Porch Steps',
+        startX: 12.0,
+        startY: 0.0,
+        startZ: 13.6, // bottom on driveway
+        endX: 12.0,
+        endY: 0.45,  // top on entrance porch landing
+        endZ: 11.6,
+        width: 3.4,
+        steps: 4,
+        style: 'stone_steps',
+        run: 2.0,
+        dx: 0,
+        dz: -2.0,
+        ux: 0,
+        uz: -1,
+        vx: 1,
+        vz: 0,
+        halfWidth: 1.7,
+        bottom: { x: 12.0, y: 0.0, z: 13.6 },
+        top: { x: 12.0, y: 0.45, z: 11.6 },
+      });
+    }
   }
 
   if (world && world.scene) {
@@ -682,12 +741,12 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
     setupCadCollidersAndDoors(world, wrapper, options);
   }
 
-  // Spawn player right in front of the grand entrance doors looking towards the doors
+  // Spawn player on the driveway approach facing the entrance steps and front door
   if (world && !options.isDesigner) {
     world.spawn = {
-      x: 10.54,
-      z: 6.5,
-      yaw: 0, // Faces towards -Z directly at the entrance doors at Z = 2.94!
+      x: 12.0,
+      z: 15.5, // 2m in front of the entrance steps on the paved driveway
+      yaw: 0,  // Looking directly along -Z towards the entrance steps and double doors!
     };
   }
 
