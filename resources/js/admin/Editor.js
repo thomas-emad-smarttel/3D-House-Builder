@@ -77,6 +77,7 @@ export class Editor {
   async loadHousesList() {
     const data = await api('GET', '/admin/houses');
     this.allHouses = data.houses || [];
+    this.canConvertMax = !!data.can_convert_max;
     if (Array.isArray(data.library)) syncLibrary(data.library);
   }
 

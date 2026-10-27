@@ -470,13 +470,36 @@ function openImportCadHouseModal(ed) {
     }
 
     if (ext === 'max') {
-      fileLabel.innerHTML += `<div style="margin-top:6px;font-size:0.85rem;color:#fde047;background:rgba(234,179,8,0.15);padding:6px 10px;border-radius:6px;border:1px solid rgba(234,179,8,0.3)">
-        ⚡ <strong>Autodesk 3ds Max (.max) file detected:</strong> The system will automatically convert it via the server converter or inspect companion 3D exports.
-      </div>`;
-    } else if (ext === 'zip' || ext === 'rar') {
-      fileLabel.innerHTML += `<div style="margin-top:6px;font-size:0.85rem;color:#67e8f9;background:rgba(6,182,212,0.15);padding:6px 10px;border-radius:6px;border:1px solid rgba(6,182,212,0.3)">
-        📦 <strong>3D Archive package:</strong> Any enclosed .OBJ, .GLB, or .MTL house geometry and materials will be extracted automatically.
-      </div>`;
+      if (ed.canConvertMax) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🚀 Import & Build 3D House';
+        fileLabel.innerHTML += `<div style="margin-top:8px;font-size:0.85rem;color:#fde047;background:rgba(234,179,8,0.15);padding:8px 12px;border-radius:6px;border:1px solid rgba(234,179,8,0.3);text-align:left">
+          ⚡ <strong>Autodesk 3ds Max (.max) file detected:</strong> Server converter CLI is configured and will convert the geometry automatically.
+        </div>`;
+      } else {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⚠️ Export as .OBJ or .GLB from 3ds Max to Import';
+        fileLabel.innerHTML += `<div style="margin-top:8px;font-size:0.85rem;color:#fca5a5;background:rgba(239,68,68,0.15);padding:10px 14px;border-radius:8px;border:1px solid rgba(239,68,68,0.35);text-align:left">
+          <div style="font-weight:700;color:#f87171;margin-bottom:4px;font-size:0.95rem">⚠️ 3ds Max (.max) Cannot Be Rendered Directly</div>
+          <div style="color:#e2e8f0;line-height:1.4"><strong>${name}</strong> is a <strong>${sizeMb} MB</strong> proprietary binary project file. Web browsers and WebGL engines cannot read native .max files directly without Autodesk 3ds Max.</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(239,68,68,0.25);color:#f1f5f9;font-size:0.83rem;line-height:1.5">
+            <strong>👉 How to import this house in 15 seconds:</strong><br>
+            1. Open <em>${name}</em> in <strong>Autodesk 3ds Max</strong>.<br>
+            2. Select <strong>File ➔ Export ➔ Export...</strong><br>
+            3. Choose <strong>Wavefront Object (*.OBJ)</strong> or <strong>glTF (*.glb)</strong>.<br>
+            4. Upload the exported <strong>.obj</strong> or <strong>.glb</strong> file here (it uploads in seconds and renders immediately in full 3D!).<br>
+            <span style="color:#93c5fd;display:inline-block;margin-top:4px">💡 <em>Tip: If you downloaded this model from 3DSky, TurboSquid, or CGTrader, check the folder or .zip package — an exported .obj or .fbx is usually already included!</em></span>
+          </div>
+        </div>`;
+      }
+    } else {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '🚀 Import & Build 3D House';
+      if (ext === 'zip' || ext === 'rar') {
+        fileLabel.innerHTML += `<div style="margin-top:6px;font-size:0.85rem;color:#67e8f9;background:rgba(6,182,212,0.15);padding:6px 10px;border-radius:6px;border:1px solid rgba(6,182,212,0.3)">
+          📦 <strong>3D Archive package:</strong> Any enclosed .OBJ, .GLB, or .MTL house geometry and materials will be extracted automatically.
+        </div>`;
+      }
     }
   };
 
@@ -545,11 +568,15 @@ function openImportCadHouseModal(ed) {
       progressBar.style.display = 'block';
 
       try {
-        const res = await uploadWithProgress('/admin/houses/import-cad', fd, (pct) => {
+        const res = await uploadWithProgress('/admin/houses/import-cad', fd, (pct, loaded, total) => {
           const fill = progressBar.querySelector('#cad-import-progress-fill');
           if (fill) fill.style.width = `${pct}%`;
-          if (pct >= 100) {
-            submitBtn.textContent = 'Generating 3D House & Floor Levels…';
+          const mbLoaded = (loaded / (1024 * 1024)).toFixed(1);
+          const mbTotal = (total / (1024 * 1024)).toFixed(1);
+          if (pct < 100) {
+            submitBtn.textContent = `Uploading: ${pct}% (${mbLoaded} / ${mbTotal} MB)…`;
+          } else {
+            submitBtn.textContent = 'Server processing & analyzing 3D model…';
           }
         });
 

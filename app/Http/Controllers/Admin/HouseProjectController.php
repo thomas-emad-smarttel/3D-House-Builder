@@ -52,6 +52,7 @@ class HouseProjectController extends Controller
         return response()->json([
             'houses' => $houses,
             'library' => $this->library->all(),
+            'can_convert_max' => (bool) (env('MAX_CONVERTER_PATH') && (is_executable((string) env('MAX_CONVERTER_PATH')) || (PHP_OS_FAMILY === 'Windows' && file_exists((string) env('MAX_CONVERTER_PATH'))))),
         ]);
     }
 
@@ -353,7 +354,9 @@ class HouseProjectController extends Controller
     public function importCad(Request $request): JsonResponse
     {
         @ini_set('memory_limit', '1024M');
-        @set_time_limit(300);
+        @ini_set('max_execution_time', '600');
+        @ini_set('max_input_time', '600');
+        @set_time_limit(600);
 
         $validated = $request->validate([
             'file' => ['required', 'file', 'max:204800'],
