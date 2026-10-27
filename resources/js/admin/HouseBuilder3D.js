@@ -741,6 +741,7 @@ export class HouseBuilder3D {
       text: `${t.icon} ${t.label}`,
       onclick: () => {
         this.activeTab = t.id;
+        this.updateHighlightHelper();
         this.renderInspector();
       },
     })));
@@ -832,7 +833,7 @@ export class HouseBuilder3D {
       },
     }, ...ROOM_TYPES.map(([val, label]) => el('option', { value: val, selected: room.type === val, text: label })));
 
-    // Dimension Sliders
+    // Dimension Sliders with smooth non-blocking input updates
     const makeSlider = (label, val, min, max, step, unit, onChange) => {
       const valLabel = el('span', { style: { color: '#60a5fa', fontWeight: '600' }, text: `${val}${unit}` });
       const range = el('input', {
@@ -846,6 +847,9 @@ export class HouseBuilder3D {
           const num = Number(e.target.value);
           valLabel.textContent = `${num}${unit}`;
           onChange(num);
+          this.updateHighlightHelper();
+        },
+        onchange: () => {
           this.markDirty();
           this.rebuild3D();
         },
@@ -859,11 +863,84 @@ export class HouseBuilder3D {
       );
     };
 
-    const widthSlider = makeSlider('Width (Length)', size.w || 10, 2, 25, 0.5, 'm', (v) => { size.w = v; });
-    const depthSlider = makeSlider('Depth (Width)', size.d || 8, 2, 25, 0.5, 'm', (v) => { size.d = v; });
-    const heightSlider = makeSlider('Ceiling Height', size.h || 3.2, 2.4, 6.0, 0.1, 'm', (v) => { size.h = v; });
-    const posXSlider = makeSlider('Position X', pos.x || 0, -25, 25, 0.5, 'm', (v) => { pos.x = v; });
-    const posZSlider = makeSlider('Position Z', pos.z || 0, -25, 25, 0.5, 'm', (v) => { pos.z = v; });
+    const maxW = Math.max(30, Math.ceil(Math.max(Number(size.w || 10) * 1.4, Number(this.house.plot_width || 30))));
+    const maxD = Math.max(30, Math.ceil(Math.max(Number(size.d || 8) * 1.4, Number(this.house.plot_depth || 30))));
+    const maxPlotR = Math.max(30, Math.ceil(Math.max(Number(this.house.plot_width || 30), Number(this.house.plot_depth || 30)) / 2));
+
+    const widthSlider = makeSlider('Width (Length)', size.w || 10, 2, maxW, 0.5, 'm', (v) => { size.w = v; });
+    const depthSlider = makeSlider('Depth (Width)', size.d || 8, 2, maxD, 0.5, 'm', (v) => { size.d = v; });
+    const heightSlider = makeSlider('Ceiling Height', size.h || 3.2, 2.4, 15.0, 0.1, 'm', (v) => { size.h = v; });
+    const posXSlider = makeSlider('Position X', pos.x || 0, -maxPlotR, maxPlotR, 0.5, 'm', (v) => { pos.x = v; });
+    const posZSlider = makeSlider('Position Z', pos.z || 0, -maxPlotR, maxPlotR, 0.5, 'm', (v) => { pos.z = v; });
+
+    // 🏛️ 3D CAD Architectural Shell Info & Controls (if imported CAD house)
+    let cadModelSection = null;
+    const cadModel = this.house.environment?.cad_model || this.house.cad_model;
+    if (cadModel && cadModel.file_path) {
+      const rawScale = Number(cadModel.scale) || 0.01;
+      const dims = cadModel.dimensions || { w: 54, d: 110.79, h: 13.38 };
+      const scaleLabel = el('span', { style: { color: '#38bdf8', fontWeight: 'bold' }, text: `${rawScale}` });
+
+      const scaleSlider = el('input', {
+        type: 'range',
+        min: '0.002',
+        max: '0.04',
+        step: '0.001',
+        value: String(rawScale),
+        style: { width: '100%', accentColor: '#10b981' },
+        oninput: (e) => {
+          const val = Number(e.target.value);
+          scaleLabel.textContent = `${val}`;
+          cadModel.scale = val;
+          if (this.world?.scene) {
+            const cadWrapper = this.world.scene.getObjectByName('cad-house-model');
+            if (cadWrapper) cadWrapper.scale.setScalar(val);
+          }
+        },
+        onchange: () => {
+          this.markDirty();
+          this.rebuild3D();
+        },
+      });
+
+      cadModelSection = el('div', {
+        style: {
+          background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))',
+          border: '1px solid #3b82f6',
+          borderRadius: '8px',
+          padding: '12px',
+          marginBottom: '6px',
+        },
+      },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' } },
+          el('span', { style: { fontSize: '1.2rem' }, text: '🏛️' }),
+          el('strong', { style: { color: '#93c5fd', fontSize: '0.9rem' }, text: '3D CAD Architectural Shell' }),
+        ),
+        el('p', {
+          style: { margin: '0 0 8px', fontSize: '0.78rem', color: '#94a3b8', lineHeight: '1.4' },
+          text: `File: ${cadModel.filename || 'villa+obj.obj'} · Dimensions: ${dims.w}m × ${dims.d}m × ${dims.h}m · ${Number(cadModel.face_count || 0).toLocaleString()} faces`
+        }),
+        el('div', { style: { marginBottom: '6px' } },
+          el('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: '2px' } },
+            el('span', { text: 'CAD Architectural Scale:' }),
+            scaleLabel,
+          ),
+          scaleSlider,
+        ),
+        el('p', {
+          style: {
+            margin: '8px 0 0',
+            fontSize: '0.75rem',
+            color: '#38bdf8',
+            background: 'rgba(56, 189, 248, 0.1)',
+            padding: '6px 8px',
+            borderRadius: '4px',
+            borderLeft: '3px solid #38bdf8',
+          },
+          text: '💡 Exterior walls, glass, and layout are sculpted in 3D CAD. To add, place, or move furniture inside, switch to the "🪑 Furnish" tab above.'
+        }),
+      );
+    }
 
     // Floor Materials ("Build Floor")
     const floorMatSelect = el('select', {
@@ -1022,6 +1099,7 @@ export class HouseBuilder3D {
     });
 
     return el('div', { style: { padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' } },
+      cadModelSection,
       el('div', {},
         el('label', { style: { fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }, text: 'Select Room:' }),
         roomSelector,
@@ -1733,6 +1811,95 @@ export class HouseBuilder3D {
       );
     }
 
+    // List of placed objects in this room
+    let placedObjectsList = null;
+    if (objects.length > 0) {
+      placedObjectsList = el('div', {
+        style: {
+          background: '#0f172a',
+          border: '1px solid #334155',
+          borderRadius: '8px',
+          padding: '10px',
+          marginBottom: '16px',
+        },
+      },
+        el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
+          el('strong', { style: { color: '#cbd5e1', fontSize: '0.82rem' }, text: `📋 Placed Objects in Room (${objects.length})` }),
+        ),
+        el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' } },
+          ...objects.map((o) => {
+            const isSelected = o.id === this.selectedObjectId;
+            const def = typeDef(o.library_id || o.type);
+            const label = def?.name || o.name || o.type || 'Object';
+            return el('div', {
+              style: {
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '6px 8px',
+                borderRadius: '6px',
+                background: isSelected ? '#1e3a8a' : '#1e293b',
+                border: isSelected ? '1px solid #3b82f6' : '1px solid #334155',
+              },
+            },
+              el('div', {
+                style: { cursor: 'pointer', flex: '1', display: 'flex', flexDirection: 'column' },
+                onclick: () => {
+                  this.selectObject(o.id);
+                  this.renderInspector();
+                },
+              },
+                el('span', { style: { fontSize: '0.82rem', color: isSelected ? '#93c5fd' : '#e2e8f0', fontWeight: '500' }, text: `🪑 ${label}` }),
+                el('span', { style: { fontSize: '0.72rem', color: '#94a3b8' }, text: `Pos: X: ${o.x || 0}m, Z: ${o.z || 0}m · Rot: ${o.rot || 0}°` }),
+              ),
+              el('button', {
+                type: 'button',
+                class: 'btn btn-small',
+                style: { background: isSelected ? '#2563eb' : '#334155', color: '#fff', fontSize: '0.72rem', padding: '3px 8px', marginRight: '4px' },
+                text: isSelected ? 'Selected' : '🎯 Pick',
+                onclick: () => {
+                  this.selectObject(o.id);
+                  this.renderInspector();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                class: 'btn btn-small',
+                style: { background: '#7f1d1d', color: '#fca5a5', fontSize: '0.72rem', padding: '3px 6px' },
+                text: '🗑️',
+                title: 'Delete Object',
+                onclick: () => {
+                  this.saveHistorySnapshot();
+                  const idx = objects.findIndex((item) => item.id === o.id);
+                  if (idx !== -1) objects.splice(idx, 1);
+                  if (this.selectedObjectId === o.id) this.selectObject(null);
+                  this.markDirty();
+                  this.renderInspector();
+                  this.rebuild3D();
+                },
+              }),
+            );
+          }),
+        ),
+      );
+    } else {
+      placedObjectsList = el('div', {
+        style: {
+          background: 'rgba(15, 23, 42, 0.6)',
+          border: '1px dashed #334155',
+          borderRadius: '8px',
+          padding: '12px',
+          marginBottom: '16px',
+          textAlign: 'center',
+        },
+      },
+        el('p', {
+          style: { margin: 0, fontSize: '0.8rem', color: '#94a3b8' },
+          text: '✨ No custom objects placed in this room yet. Click any furniture item below to place it inside the villa!'
+        }),
+      );
+    }
+
     // Catalog Categories
     const catalogCards = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
 
@@ -1763,11 +1930,20 @@ export class HouseBuilder3D {
           onclick: () => {
             this.saveHistorySnapshot();
             const defParams = item.p || { w: 1.8, d: 0.8, color: '#3b4452' };
+            // Position near room center with slight offset if objects already exist
+            let placeX = 0;
+            let placeZ = 0;
+            if (objects.length > 0) {
+              const offsetAngle = (objects.length * 0.9) % (Math.PI * 2);
+              const offsetDist = 1.5 + (objects.length % 5) * 0.8;
+              placeX = Math.round(Math.cos(offsetAngle) * offsetDist * 10) / 10;
+              placeZ = Math.round(Math.sin(offsetAngle) * offsetDist * 10) / 10;
+            }
             const newObj = {
               id: `obj-${item.type}-${Date.now().toString(36)}`,
               type: item.type,
-              x: 0,
-              z: 0,
+              x: placeX,
+              z: placeZ,
               rot: 0,
               p: { ...defParams },
             };
@@ -1775,6 +1951,7 @@ export class HouseBuilder3D {
             this.markDirty();
             this.rebuild3D();
             this.selectObject(newObj.id);
+            this.renderInspector();
           },
         });
         itemsGrid.append(btn);
@@ -1791,6 +1968,7 @@ export class HouseBuilder3D {
     return el('div', { style: { padding: '16px' } },
       el('h4', { style: { margin: '0 0 10px', fontSize: '0.95rem', color: '#f8fafc' }, text: `Furnish & Decorate ("Build Every Thing")` }),
       selectedObjSection,
+      placedObjectsList,
       catalogCards,
     );
   }
@@ -3211,6 +3389,11 @@ export class HouseBuilder3D {
       this.highlightHelper = null;
     }
 
+    const hasCadModel = !!(this.house.environment?.cad_model || this.house.cad_model);
+    if (hasCadModel && this.activeTab !== 'rooms') {
+      return; // Keep 3D viewport clean and uncluttered when furnishing or viewing
+    }
+
     const room = this.currentRoom;
     if (!room) return;
 
@@ -3227,7 +3410,12 @@ export class HouseBuilder3D {
 
     const boxGeo = new THREE.BoxGeometry(rw + 0.1, rh + 0.1, rd + 0.1);
     const edges = new THREE.EdgesGeometry(boxGeo);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2 });
+    const lineMat = new THREE.LineBasicMaterial({
+      color: hasCadModel ? 0x06b6d4 : 0x3b82f6,
+      transparent: hasCadModel,
+      opacity: hasCadModel ? 0.45 : 1.0,
+      linewidth: 1,
+    });
     this.highlightHelper = new THREE.LineSegments(edges, lineMat);
     this.highlightHelper.position.set(rx, elevation + rh / 2, rz);
     this.scene.add(this.highlightHelper);
@@ -3423,6 +3611,20 @@ export class HouseBuilder3D {
         this.selectObject(null);
         this.updateSelectionToast();
         this.renderInspector();
+      }
+
+      // If clicked on CAD model geometry, provide helpful architectural feedback
+      const hasCadModel = !!(this.house.environment?.cad_model || this.house.cad_model);
+      if (hasCadModel && this.world?.scene) {
+        const cadWrapper = this.world.scene.getObjectByName('cad-house-model');
+        if (cadWrapper) {
+          const cadHits = this.raycaster.intersectObjects(cadWrapper.children, true);
+          if (cadHits.length > 0 && this.selectionToast) {
+            const hitMesh = cadHits[0].object;
+            const meshName = hitMesh.name || 'Architecture';
+            this.selectionToast.textContent = `🏛️ CAD Villa Geometry: ${meshName} · Switch to "🪑 Furnish" tab to place & move furniture`;
+          }
+        }
       }
     });
 

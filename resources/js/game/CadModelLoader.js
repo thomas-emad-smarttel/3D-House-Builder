@@ -492,8 +492,12 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
   }
 }
 
+const cadModelTemplateCache = new Map();
+const cadModelPendingLoads = new Map();
+
 /**
  * Loads a 3D CAD Architectural House Model (OBJ, GLB, GLTF) and integrates it into the 3D World.
+ * Features in-memory template caching so models load instantly without re-downloading or re-parsing.
  *
  * @param {Object} world - Active Three.js World instance
  * @param {Object} cadModel - Metadata { format, file_path, mtl_path, scale, dimensions }
@@ -536,70 +540,111 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
 
   const format = (cadModel.format || 'obj').toLowerCase();
   const scale = Number(cadModel.scale) || 1.0;
+  const cacheKey = `${filePath}::${mtlPath || ''}::${format}`;
 
-  let loadedObject = null;
+  let templateData = cadModelTemplateCache.get(cacheKey);
 
-  try {
-    if (format === 'glb' || format === 'gltf') {
-      const gltfLoader = new GLTFLoader();
-      const gltf = await new Promise((resolve, reject) => {
-        gltfLoader.load(filePath, resolve, undefined, reject);
-      });
-      loadedObject = gltf.scene || gltf.scenes?.[0];
+  if (!templateData) {
+    if (cadModelPendingLoads.has(cacheKey)) {
+      templateData = await cadModelPendingLoads.get(cacheKey);
     } else {
-      // Wavefront OBJ (with optional MTL materials)
-      if (mtlPath) {
+      const loadPromise = (async () => {
+        let loadedObject = null;
         try {
-          const mtlLoader = new MTLLoader();
-          const materials = await new Promise((resolve, reject) => {
-            mtlLoader.load(mtlPath, resolve, undefined, reject);
-          });
-          materials.preload();
-          const objLoader = new OBJLoader();
-          objLoader.setMaterials(materials);
-          loadedObject = await new Promise((resolve, reject) => {
-            objLoader.load(filePath, resolve, undefined, reject);
-          });
-        } catch (mtlErr) {
-          console.warn('[3D CAD] Material file load failed, loading OBJ geometry with smart materials:', mtlErr);
-          const fallbackLoader = new OBJLoader();
-          loadedObject = await new Promise((resolve, reject) => {
-            fallbackLoader.load(filePath, resolve, undefined, reject);
-          });
+          if (format === 'glb' || format === 'gltf') {
+            const gltfLoader = new GLTFLoader();
+            const gltf = await new Promise((resolve, reject) => {
+              gltfLoader.load(filePath, resolve, undefined, reject);
+            });
+            loadedObject = gltf.scene || gltf.scenes?.[0];
+          } else {
+            // Wavefront OBJ (with optional MTL materials)
+            if (mtlPath) {
+              try {
+                const mtlLoader = new MTLLoader();
+                const materials = await new Promise((resolve, reject) => {
+                  mtlLoader.load(mtlPath, resolve, undefined, reject);
+                });
+                materials.preload();
+                const objLoader = new OBJLoader();
+                objLoader.setMaterials(materials);
+                loadedObject = await new Promise((resolve, reject) => {
+                  objLoader.load(filePath, resolve, undefined, reject);
+                });
+              } catch (mtlErr) {
+                console.warn('[3D CAD] Material file load failed, loading OBJ geometry with smart materials:', mtlErr);
+                const fallbackLoader = new OBJLoader();
+                loadedObject = await new Promise((resolve, reject) => {
+                  fallbackLoader.load(filePath, resolve, undefined, reject);
+                });
+              }
+            } else {
+              const objLoader = new OBJLoader();
+              loadedObject = await new Promise((resolve, reject) => {
+                objLoader.load(filePath, resolve, undefined, reject);
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`[3D CAD] Error loading 3D model (${filePath}):`, err);
+          return null;
         }
-      } else {
-        const objLoader = new OBJLoader();
-        loadedObject = await new Promise((resolve, reject) => {
-          objLoader.load(filePath, resolve, undefined, reject);
+
+        if (!loadedObject) {
+          return null;
+        }
+
+        // Measure bounding dimensions
+        const bbox = new THREE.Box3().setFromObject(loadedObject);
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+        const center = new THREE.Vector3();
+        bbox.getCenter(center);
+
+        // Center horizontally at (0, 0)
+        loadedObject.position.x = -center.x;
+        loadedObject.position.z = -center.z;
+
+        // Align bottom: if the model has sunken features (e.g. pool at y < 0), align y=0 with ground level
+        if (bbox.min.y < -0.1 && bbox.max.y > 0.1) {
+          loadedObject.position.y = 0;
+        } else {
+          loadedObject.position.y = -bbox.min.y;
+        }
+
+        // Apply intelligent architectural materials to all meshes on the template
+        loadedObject.traverse((child) => {
+          if (child.isMesh) {
+            applySmartArchitecturalMaterial(child, options);
+          }
         });
+
+        return {
+          object: loadedObject,
+          size,
+          bbox,
+        };
+      })();
+
+      cadModelPendingLoads.set(cacheKey, loadPromise);
+      try {
+        templateData = await loadPromise;
+        if (templateData) {
+          cadModelTemplateCache.set(cacheKey, templateData);
+        }
+      } finally {
+        cadModelPendingLoads.delete(cacheKey);
       }
     }
-  } catch (err) {
-    console.error(`[3D CAD] Error loading 3D model (${filePath}):`, err);
+  }
+
+  if (!templateData || !templateData.object) {
     return null;
   }
 
-  if (!loadedObject) {
-    return null;
-  }
-
-  // Measure bounding dimensions
-  const bbox = new THREE.Box3().setFromObject(loadedObject);
-  const size = new THREE.Vector3();
-  bbox.getSize(size);
-  const center = new THREE.Vector3();
-  bbox.getCenter(center);
-
-  // Center horizontally at (0, 0)
-  loadedObject.position.x = -center.x;
-  loadedObject.position.z = -center.z;
-
-  // Align bottom: if the model has sunken features (e.g. pool at y < 0), align y=0 with ground level
-  if (bbox.min.y < -0.1 && bbox.max.y > 0.1) {
-    loadedObject.position.y = 0;
-  } else {
-    loadedObject.position.y = -bbox.min.y;
-  }
+  // Clone from the cached template instantly (< 5ms) without re-parsing geometry
+  const loadedObject = templateData.object.clone(true);
+  const size = templateData.size;
 
   const wrapper = new THREE.Group();
   wrapper.name = 'cad-house-model';
@@ -612,13 +657,6 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
   const modelWidth = size.x * scale;
   const modelDepth = size.z * scale;
   const modelHeight = size.y * scale;
-
-  // Apply intelligent architectural materials to all meshes
-  loadedObject.traverse((child) => {
-    if (child.isMesh) {
-      applySmartArchitecturalMaterial(child, options);
-    }
-  });
 
   // Solid floor slab collider for walking physics inside and around the CAD house
   if (world && world.floorSlabs && !options.isDesigner) {
