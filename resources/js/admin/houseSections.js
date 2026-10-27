@@ -1,5 +1,5 @@
 import { el } from '../ui/dom.js';
-import { api } from './api.js';
+import { api, uploadWithProgress } from './api.js';
 
 const FLOOR_MATERIALS = [
   ['parquet', '🪵 Hardwood Parquet (Herringbone)'],
@@ -129,12 +129,21 @@ export function projectsSection(ed) {
       el('h2', { style: { margin: 0 }, text: 'House Projects' }),
       el('p', { class: 'hint', style: { margin: '4px 0 0' }, text: 'Create, duplicate, customize and switch between different houses and villas.' }),
     ),
-    el('button', {
-      type: 'button',
-      class: 'btn btn-primary',
-      text: '➕ Create New House Project',
-      onclick: () => openNewHouseModal(ed),
-    }),
+    el('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
+      el('button', {
+        type: 'button',
+        class: 'btn',
+        style: { background: 'linear-gradient(135deg, #0284c7, #2563eb)', color: '#fff', border: 'none', fontWeight: '600' },
+        text: '📐 Import 3D CAD House',
+        onclick: () => openImportCadHouseModal(ed),
+      }),
+      el('button', {
+        type: 'button',
+        class: 'btn btn-primary',
+        text: '➕ Create New House Project',
+        onclick: () => openNewHouseModal(ed),
+      }),
+    ),
   );
 
   const grid = el('div', { class: 'houses-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' } });
@@ -316,6 +325,267 @@ function openNewHouseModal(ed) {
       el('h3', { text: 'Create New House Project' }),
       el('button', { type: 'button', class: 'btn btn-small', text: '✕', onclick: close }),
     ),
+    form,
+  );
+
+  backdrop.append(box);
+  document.body.append(backdrop);
+}
+
+function openImportCadHouseModal(ed) {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const close = () => backdrop.remove();
+
+  const fileInput = el('input', {
+    type: 'file',
+    accept: '.obj,.glb,.gltf,.dxf',
+    style: { display: 'none' },
+  });
+
+  const mtlInput = el('input', {
+    type: 'file',
+    accept: '.mtl',
+    style: { display: 'none' },
+  });
+
+  const titleInput = el('input', {
+    type: 'text',
+    class: 'input',
+    placeholder: 'e.g. Modern Horizon Villa (leave blank to auto-detect from file)',
+  });
+
+  const descInput = el('textarea', {
+    class: 'input',
+    rows: 2,
+    placeholder: 'Optional notes about architectural design, CAD source, or revision…',
+  });
+
+  const unitSelect = el('select', { class: 'input' },
+    el('option', { value: 'auto', text: 'Auto-Detect Scale (Recommended)' }),
+    el('option', { value: 'm', text: 'Meters (1 unit = 1m)' }),
+    el('option', { value: 'cm', text: 'Centimeters (100 units = 1m)' }),
+    el('option', { value: 'mm', text: 'Millimeters (1000 units = 1m, common in CAD)' }),
+    el('option', { value: 'inch', text: 'Inches / Feet (1 unit = 0.0254m)' }),
+  );
+
+  const skySelect = el('select', { class: 'input' },
+    el('option', { value: 'daylight', text: '☀️ Daylight (Natural Sun & Sky)' }),
+    el('option', { value: 'golden_hour', text: '🌇 Warm Golden Hour' }),
+    el('option', { value: 'sunset', text: '🌅 Amber Sunset' }),
+    el('option', { value: 'night', text: '🌙 Midnight Architectural Lighting' }),
+    el('option', { value: 'cyberpunk', text: '🌆 Cyberpunk Twilight Glow' }),
+  );
+
+  const groundSelect = el('select', { class: 'input' },
+    el('option', { value: 'grass', text: '🌿 Lush Green Lawn Plinth' }),
+    el('option', { value: 'paved', text: '🧱 Polished Architectural Pavers' }),
+    el('option', { value: 'concrete', text: '🏗️ Smooth Micro-Cement Patio' }),
+    el('option', { value: 'water', text: '🌊 Waterfront / Infinity Island' }),
+  );
+
+  const paddingInput = el('input', {
+    type: 'number',
+    class: 'input',
+    value: '8',
+    min: '2',
+    max: '50',
+    step: '1',
+  });
+
+  // Dropzone UI
+  const fileLabel = el('div', {
+    class: 'hint',
+    style: { marginTop: '6px', fontWeight: '500', color: '#93c5fd' },
+    text: 'Click or drag & drop .OBJ, .GLB, .GLTF, or .DXF CAD model',
+  });
+
+  const dropzone = el('div', {
+    style: {
+      border: '2px dashed #3b82f6',
+      borderRadius: '10px',
+      padding: '24px',
+      textAlign: 'center',
+      background: 'rgba(30, 41, 59, 0.5)',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+    },
+    onclick: () => fileInput.click(),
+    ondragover: (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = '#60a5fa';
+      dropzone.style.background = 'rgba(59, 130, 246, 0.15)';
+    },
+    ondragleave: () => {
+      dropzone.style.borderColor = '#3b82f6';
+      dropzone.style.background = 'rgba(30, 41, 59, 0.5)';
+    },
+    ondrop: (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = '#3b82f6';
+      dropzone.style.background = 'rgba(30, 41, 59, 0.5)';
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileSelection();
+      }
+    },
+  },
+    el('div', { style: { fontSize: '2rem', marginBottom: '8px' }, text: '📐' }),
+    fileLabel,
+    el('p', { class: 'hint', style: { margin: '4px 0 0', fontSize: '0.8rem' }, text: 'Supports full 3D house designs exported from AutoCAD, SketchUp, Revit, Blender, or Rhino.' }),
+  );
+
+  const mtlSection = el('div', {
+    class: 'field',
+    style: { display: 'none', background: 'rgba(30, 41, 59, 0.3)', padding: '12px', borderRadius: '8px', border: '1px solid #334155' },
+  },
+    el('label', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+      el('span', { text: 'Companion Material Template (.mtl) (Optional)' }),
+      el('button', {
+        type: 'button',
+        class: 'btn btn-small',
+        text: 'Browse .MTL',
+        onclick: () => mtlInput.click(),
+      }),
+    ),
+    el('div', { id: 'mtl-filename', class: 'hint', style: { color: '#cbd5e1', marginTop: '4px' }, text: 'No .mtl file selected (default architectural textures will be applied).' }),
+  );
+
+  const handleFileSelection = () => {
+    const f = fileInput.files?.[0];
+    if (!f) return;
+    const name = f.name;
+    const ext = name.split('.').pop().toLowerCase();
+    const sizeMb = (f.size / (1024 * 1024)).toFixed(1);
+    fileLabel.innerHTML = `<strong>Selected:</strong> ${name} <span style="opacity:0.7">(${sizeMb} MB)</span>`;
+
+    if (!titleInput.value) {
+      const baseName = name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      titleInput.value = baseName.charAt(0).toUpperCase() + baseName.slice(1);
+    }
+
+    if (ext === 'obj') {
+      mtlSection.style.display = 'block';
+    } else {
+      mtlSection.style.display = 'none';
+    }
+  };
+
+  fileInput.onchange = handleFileSelection;
+
+  mtlInput.onchange = () => {
+    const f = mtlInput.files?.[0];
+    const label = mtlSection.querySelector('#mtl-filename');
+    if (label && f) {
+      label.textContent = `Attached: ${f.name} (${(f.size / 1024).toFixed(0)} KB)`;
+    }
+  };
+
+  // Progress Bar
+  const progressBar = el('div', {
+    style: {
+      width: '100%',
+      height: '6px',
+      background: '#1e293b',
+      borderRadius: '3px',
+      overflow: 'hidden',
+      display: 'none',
+      marginTop: '12px',
+    },
+  },
+    el('div', {
+      id: 'cad-import-progress-fill',
+      style: { width: '0%', height: '100%', background: '#3b82f6', transition: 'width 0.2s' },
+    })
+  );
+
+  const submitBtn = el('button', {
+    type: 'submit',
+    class: 'btn btn-primary',
+    style: { background: 'linear-gradient(135deg, #0284c7, #2563eb)' },
+    text: '🚀 Import & Build 3D House',
+  });
+
+  const form = el('form', {
+    onsubmit: async (e) => {
+      e.preventDefault();
+      const primaryFile = fileInput.files?.[0];
+      if (!primaryFile) {
+        ed.toast('Please select a 3D CAD model file (.obj, .glb, .gltf, or .dxf).', 'bad');
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append('file', primaryFile);
+      if (mtlInput.files?.[0]) {
+        fd.append('mtl_file', mtlInput.files[0]);
+      }
+      if (titleInput.value.trim()) {
+        fd.append('title', titleInput.value.trim());
+      }
+      if (descInput.value.trim()) {
+        fd.append('description', descInput.value.trim());
+      }
+      fd.append('unit_scale', unitSelect.value);
+      fd.append('sky_preset', skySelect.value);
+      fd.append('ground_preset', groundSelect.value);
+      fd.append('plot_padding', paddingInput.value);
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading & Analyzing CAD Geometry…';
+      progressBar.style.display = 'block';
+
+      try {
+        const res = await uploadWithProgress('/admin/houses/import-cad', fd, (pct) => {
+          const fill = progressBar.querySelector('#cad-import-progress-fill');
+          if (fill) fill.style.width = `${pct}%`;
+          if (pct >= 100) {
+            submitBtn.textContent = 'Generating 3D House & Floor Levels…';
+          }
+        });
+
+        ed.toast(res.message || '3D CAD House imported successfully!');
+        close();
+        await ed.loadHousesList();
+        if (res.house?.id) {
+          await ed.switchHouse(res.house.id);
+        }
+      } catch (err) {
+        ed.toast(err.message || 'CAD Import failed.', 'bad');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🚀 Import & Build 3D House';
+        progressBar.style.display = 'none';
+      }
+    },
+  },
+    dropzone,
+    mtlSection,
+    progressBar,
+    el('div', { class: 'field', style: { marginTop: '14px' } }, el('label', { text: 'House Project Title' }), titleInput),
+    el('div', { class: 'field' }, el('label', { text: 'Description' }), descInput),
+    el('div', { class: 'grid-2' },
+      el('div', { class: 'field' }, el('label', { text: 'Unit / Scale' }), unitSelect),
+      el('div', { class: 'field' }, el('label', { text: 'Plot Lawn Padding (m)' }), paddingInput),
+    ),
+    el('div', { class: 'grid-2' },
+      el('div', { class: 'field' }, el('label', { text: 'Environment Lighting' }), skySelect),
+      el('div', { class: 'field' }, el('label', { text: 'Ground Surface' }), groundSelect),
+    ),
+    el('div', { class: 'btn-row', style: { marginTop: '18px' } },
+      el('button', { type: 'button', class: 'btn', text: 'Cancel', onclick: close }),
+      submitBtn,
+    ),
+  );
+
+  const box = el('div', { class: 'modal-box', style: { width: '580px', maxWidth: '95vw' } },
+    el('div', { class: 'modal-head' },
+      el('div', {},
+        el('h3', { style: { margin: 0 }, text: '📐 Import 3D CAD House Design' }),
+        el('p', { class: 'hint', style: { margin: '4px 0 0', fontSize: '0.85rem' }, text: 'Import complete 3D architectural models (.obj, .glb, .gltf, .dxf) directly into the interactive 3D House Builder.' }),
+      ),
+      el('button', { type: 'button', class: 'btn btn-small', text: '✕', onclick: close }),
+    ),
+    fileInput,
+    mtlInput,
     form,
   );
 

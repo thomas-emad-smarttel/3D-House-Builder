@@ -13,6 +13,7 @@ import {
 } from '../game/HouseArchitecture.js';
 import { BUILDERS } from './custom/builders.js';
 import { syncLibrary, registerLibraryObject, typeDef } from './custom/catalog.js';
+import { loadCadHouseModel } from '../game/CadModelLoader.js';
 
 /**
  * Builds the 3D House Environment with multi-floor levels, rooms, doors, ceilings, stairs and furniture.
@@ -141,6 +142,20 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
   world.stairsMeshes = new Map(); // stairsId -> THREE.Object3D
   world.stairs.get = (id) => world.stairsMeshes.get(id);
   world.stairs.set = (id, mesh) => world.stairsMeshes.set(id, mesh);
+
+  // Set world bounds to plot dimensions
+  world.bounds = {
+    minX: -plotW / 2,
+    maxX: plotW / 2,
+    minZ: -plotD / 2,
+    maxZ: plotD / 2,
+  };
+
+  // 0. Load Imported 3D CAD Architectural House Model (if present)
+  const cadModel = env.cad_model || houseData.cad_model;
+  if (cadModel && cadModel.file_path) {
+    loadCadHouseModel(world, cadModel, { isDesigner: false });
+  }
 
 /**
  * Deduplicate shared partition walls between adjacent rooms on the same floor.

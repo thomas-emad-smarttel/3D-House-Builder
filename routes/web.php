@@ -35,6 +35,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     // House Projects API
     Route::get('/houses', [HouseProjectController::class, 'index'])->name('houses.index');
     Route::post('/houses', [HouseProjectController::class, 'store'])->name('houses.store');
+    Route::post('/houses/import-cad', [HouseProjectController::class, 'importCad'])->name('houses.import_cad');
     Route::get('/houses/{id}', [HouseProjectController::class, 'show'])->whereNumber('id')->name('houses.show');
     Route::put('/houses/{id}', [HouseProjectController::class, 'update'])->whereNumber('id')->name('houses.update');
     Route::delete('/houses/{id}', [HouseProjectController::class, 'destroy'])->whereNumber('id')->name('houses.destroy');

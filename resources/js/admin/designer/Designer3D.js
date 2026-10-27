@@ -13,6 +13,7 @@ import {
 import { BUILDERS } from '../../scenes/custom/builders.js';
 import { typeDef } from '../../scenes/custom/catalog.js';
 import { World } from '../../game/World.js';
+import { loadCadHouseModel } from '../../game/CadModelLoader.js';
 
 export class Designer3D {
   constructor(designer) {
@@ -481,6 +482,12 @@ export class Designer3D {
       wallMaterial: wallMat,
       accentColor: room.color || '#3b82f6',
     });
+
+    // 3.5. Imported 3D CAD Architectural House Shell (if present)
+    const cadModel = this.d.ed?.house?.environment?.cad_model;
+    if (cadModel && cadModel.file_path) {
+      loadCadHouseModel(this.world, cadModel, { isDesigner: true });
+    }
 
     // 4. Placed Furniture & Objects
     this.objectMeshes.clear();

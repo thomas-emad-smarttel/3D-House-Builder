@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\House;
+use App\Support\CadHouseImporter;
 use App\Support\LibraryStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -344,5 +345,54 @@ class HouseProjectController extends Controller
         }
 
         return response()->json(['message' => 'House project deleted successfully!']);
+    }
+
+    /**
+     * Import a 3D CAD design as a complete House project.
+     */
+    public function importCad(Request $request): JsonResponse
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'max:204800'],
+            'mtl_file' => ['nullable', 'file', 'max:204800'],
+            'title' => ['nullable', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'unit_scale' => ['nullable', 'string', 'in:auto,m,meters,cm,mm,inch,in'],
+            'ground_preset' => ['nullable', 'string', 'in:grass,paved,concrete,water'],
+            'sky_preset' => ['nullable', 'string', 'in:daylight,sunset,golden_hour,night,cyberpunk'],
+            'plot_padding' => ['nullable', 'numeric', 'min:2', 'max:50'],
+        ]);
+
+        try {
+            $result = CadHouseImporter::import([
+                'file' => $request->file('file'),
+                'mtl_file' => $request->file('mtl_file'),
+                'title' => $validated['title'] ?? null,
+                'description' => $validated['description'] ?? null,
+                'unit_scale' => $validated['unit_scale'] ?? 'auto',
+                'ground_preset' => $validated['ground_preset'] ?? 'grass',
+                'sky_preset' => $validated['sky_preset'] ?? 'daylight',
+                'plot_padding' => isset($validated['plot_padding']) ? (float) $validated['plot_padding'] : null,
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return response()->json([
+                'message' => '3D CAD House project imported successfully!',
+                'house' => $result['house'],
+                'details' => $result['details'],
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => ['file' => [$e->getMessage()]],
+            ], 422);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Failed to import 3D CAD model: '.$e->getMessage(),
+            ], 500);
+        }
     }
 }
