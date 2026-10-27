@@ -124,18 +124,20 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
     receive: true,
   });
 
-  // House foundation plinth / terrace patio
-  world.box({
-    x: 0,
-    y: -0.02,
-    z: 0,
-    w: plotW * 1.05,
-    h: 0.04,
-    d: plotD * 1.05,
-    material: patioPaving,
-    tile: 3,
-    receive: true,
-  });
+  // House foundation plinth / terrace patio (for standard procedural houses)
+  if (!hasCadModel) {
+    world.box({
+      x: 0,
+      y: -0.02,
+      z: 0,
+      w: plotW * 1.05,
+      h: 0.04,
+      d: plotD * 1.05,
+      material: patioPaving,
+      tile: 3,
+      receive: true,
+    });
+  }
 
   world.objects = new Map(); // o.id -> THREE.Object3D
   world.doors = new Map();   // doorId -> THREE.Object3D
@@ -347,29 +349,31 @@ function computeFloorWallDeduplication(rooms = []) {
         }
       }
 
-      const floorMat = getFloorMaterial(theme.floor);
-      buildFloorSlab(world, {
-        x: rx,
-        y: elevation,
-        z: rz,
-        w: rw,
-        d: rd,
-        material: floorMat,
-        roomId: room.id,
-        floorId: floor.id,
-        voidZone: floorVoidZone,
-      });
+      if (!hasCadModel) {
+        const floorMat = getFloorMaterial(theme.floor);
+        buildFloorSlab(world, {
+          x: rx,
+          y: elevation,
+          z: rz,
+          w: rw,
+          d: rd,
+          material: floorMat,
+          roomId: room.id,
+          floorId: floor.id,
+          voidZone: floorVoidZone,
+        });
 
-      // Register spatial boundaries of this floor slab for realistic gravity & mid-air drop detection
-      if (!world.floorSlabs) world.floorSlabs = [];
-      world.floorSlabs.push({
-        minX: rx - rw / 2 - 0.1,
-        maxX: rx + rw / 2 + 0.1,
-        minZ: rz - rd / 2 - 0.1,
-        maxZ: rz + rd / 2 + 0.1,
-        elevation: Number(elevation),
-        voidZone: floorVoidZone ? { ...floorVoidZone } : null,
-      });
+        // Register spatial boundaries of this floor slab for realistic gravity & mid-air drop detection
+        if (!world.floorSlabs) world.floorSlabs = [];
+        world.floorSlabs.push({
+          minX: rx - rw / 2 - 0.1,
+          maxX: rx + rw / 2 + 0.1,
+          minZ: rz - rd / 2 - 0.1,
+          maxZ: rz + rd / 2 + 0.1,
+          elevation: Number(elevation),
+          voidZone: floorVoidZone ? { ...floorVoidZone } : null,
+        });
+      }
 
       // 2. Ceiling ("Clining") - skipped for imported 3D CAD architecture
       if (!hasCadModel) {

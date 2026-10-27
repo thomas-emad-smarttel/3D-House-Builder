@@ -15,10 +15,12 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   const objName = (mesh.name || '').toLowerCase();
+  const parentName = (mesh.parent?.name || '').toLowerCase();
   const matName = (mesh.material?.name || '').toLowerCase();
+  const allNames = `${objName} ${parentName}`;
 
   // 1. Transparent Architectural Glass (Windows, Balconies, Sliders)
-  if (objName.includes('glass') || matName.includes('glass') || objName.includes('glaz') || objName.includes('window')) {
+  if (allNames.includes('glass') || matName.includes('glass') || allNames.includes('glaz') || allNames.includes('window')) {
     mesh.material = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color('#94bcd8'),
       metalness: 0.1,
@@ -36,7 +38,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   // 2. Swimming Pool & Water
-  if (objName.includes('water') || objName.includes('pool') || matName.includes('water') || matName.includes('pool')) {
+  if (allNames.includes('water') || allNames.includes('pool') || matName.includes('water') || matName.includes('pool')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#0284c7'),
       roughness: 0.1,
@@ -51,7 +53,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   // 3. Dark Architectural Metal (Window frames, louvers, railings, structural beams)
-  if (objName.includes('metal') || matName.includes('metal') || objName.includes('frame') || objName.includes('rail') || objName.includes('iron') || objName.includes('steel') || objName.includes('black')) {
+  if (allNames.includes('metal') || matName.includes('metal') || allNames.includes('frame') || allNames.includes('rail') || allNames.includes('iron') || allNames.includes('steel') || allNames.includes('black')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#1e293b'),
       metalness: 0.85,
@@ -64,7 +66,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   // 4. White Plaster / Stucco Exterior Walls
-  if (objName.includes('white') || matName.includes('white') || objName.includes('stucco') || objName.includes('plaster')) {
+  if (allNames.includes('white') || matName.includes('white') || allNames.includes('stucco') || allNames.includes('plaster')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#f8fafc'),
       roughness: 0.8,
@@ -77,7 +79,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   // 5. Slate Gray Stone & Architectural Concrete Panels
-  if (objName.includes('gray') || objName.includes('grey') || objName.includes('stone') || objName.includes('concrete') || matName.includes('gray') || matName.includes('stone')) {
+  if (allNames.includes('gray') || allNames.includes('grey') || allNames.includes('stone') || allNames.includes('concrete') || matName.includes('gray') || matName.includes('stone')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#64748b'),
       roughness: 0.85,
@@ -90,7 +92,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   // 6. Natural Warm Timber & Wood Louvers
-  if (objName.includes('wood') || objName.includes('timber') || objName.includes('parquet') || objName.includes('deck') || matName.includes('wood')) {
+  if (allNames.includes('wood') || allNames.includes('timber') || allNames.includes('parquet') || allNames.includes('deck') || matName.includes('wood')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#78350f'),
       roughness: 0.65,
@@ -103,7 +105,7 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   }
 
   // 7. Green Foliage / Plants / Trees
-  if (objName.includes('plant') || objName.includes('tree') || objName.includes('leaf') || objName.includes('grass') || objName.includes('bush') || matName.includes('green')) {
+  if (allNames.includes('plant') || allNames.includes('tree') || allNames.includes('leaf') || allNames.includes('grass') || allNames.includes('bush') || matName.includes('green')) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#15803d'),
       roughness: 0.9,

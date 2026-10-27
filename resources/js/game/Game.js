@@ -32,7 +32,7 @@ export class Game {
     const exposure = parseFloat(new URLSearchParams(location.search).get('exposure'));
     this.renderer.toneMappingExposure = Number.isFinite(exposure) ? exposure : SETTINGS.render.exposure;
 
-    this.camera = new THREE.PerspectiveCamera(SETTINGS.player.fov, 1, 0.05, 180);
+    this.camera = new THREE.PerspectiveCamera(SETTINGS.player.fov, 1, 0.05, 800);
     this.input = new Input(canvas);
     this.player = new Player(this.camera);
     this.interactions = new Interactions(ui.hud);

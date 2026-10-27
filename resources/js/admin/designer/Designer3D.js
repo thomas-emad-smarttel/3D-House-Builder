@@ -135,7 +135,7 @@ export class Designer3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 200);
+    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 1000);
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
@@ -444,19 +444,23 @@ export class Designer3D {
       receive: true,
     });
 
-    // 1. Room Floor Slab
-    const floorMat = getFloorMaterial(theme.floor);
-    buildFloorSlab(this.world, {
-      x: 0,
-      y: 0,
-      z: 0,
-      w: rw,
-      d: rd,
-      material: floorMat,
-    });
+    const hasCadModel = !!(this.d.ed?.house?.environment?.cad_model);
 
-    // 2. Ceiling ("Clining") - optional toggle in 3D builder
-    if (this.showCeiling) {
+    // 1. Room Floor Slab (standard procedural rooms only)
+    if (!hasCadModel) {
+      const floorMat = getFloorMaterial(theme.floor);
+      buildFloorSlab(this.world, {
+        x: 0,
+        y: 0,
+        z: 0,
+        w: rw,
+        d: rd,
+        material: floorMat,
+      });
+    }
+
+    // 2. Ceiling ("Clining") - optional toggle in 3D builder (standard rooms only)
+    if (this.showCeiling && !hasCadModel) {
       buildCeiling(this.world, {
         x: 0,
         y: rh,
@@ -469,7 +473,6 @@ export class Designer3D {
     }
 
     // 3. Walls with cutouts for doors and windows (standard modular houses only)
-    const hasCadModel = !!(this.d.ed?.house?.environment?.cad_model);
     if (!hasCadModel) {
       const wallMat = getWallMaterial(theme.wall, theme.wall_color);
       buildRoomWallsWithCutouts(this.world, {

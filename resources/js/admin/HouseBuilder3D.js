@@ -2633,7 +2633,7 @@ export class HouseBuilder3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.camera = new THREE.PerspectiveCamera(48, w / h, 0.1, 300);
+    this.camera = new THREE.PerspectiveCamera(48, w / h, 0.1, 1000);
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
