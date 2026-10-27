@@ -57,7 +57,9 @@ export function buildHouseWorld(ctx, houseData, activeFloorLevel = 'all', option
     ? houseData.stairs
     : [];
 
-  if (!stairsList.length && floors.length > 1) {
+  const hasCadModel = !!(env.cad_model || houseData.cad_model);
+
+  if (!stairsList.length && floors.length > 1 && !hasCadModel) {
     const fl0 = floors.find((f) => f.level === 0) || floors[0];
     const fl1 = floors.find((f) => f.level === 1) || floors[1];
     if (fl0 && fl1) {
@@ -369,22 +371,24 @@ function computeFloorWallDeduplication(rooms = []) {
         voidZone: floorVoidZone ? { ...floorVoidZone } : null,
       });
 
-      // 2. Ceiling ("Clining")
-      const ceilingGroup = buildCeiling(world, {
-        x: rx,
-        y: elevation + rh,
-        z: rz,
-        w: rw,
-        d: rd,
-        ceilingType: theme.ceiling,
-        ceilingColor: theme.ceiling_color,
-        roomId: room.id,
-        floorId: floor.id,
-        voidZone: ceilingVoidZone,
-      });
+      // 2. Ceiling ("Clining") - skipped for imported 3D CAD architecture
+      if (!hasCadModel) {
+        const ceilingGroup = buildCeiling(world, {
+          x: rx,
+          y: elevation + rh,
+          z: rz,
+          w: rw,
+          d: rd,
+          ceilingType: theme.ceiling,
+          ceilingColor: theme.ceiling_color,
+          roomId: room.id,
+          floorId: floor.id,
+          voidZone: ceilingVoidZone,
+        });
 
-      if (options.showCeilings === false && ceilingGroup) {
-        ceilingGroup.visible = false;
+        if (options.showCeilings === false && ceilingGroup) {
+          ceilingGroup.visible = false;
+        }
       }
 
       // 3. Room Interior Ambient Light (indoor rooms only; balconies are naturally lit by sun/sky)
@@ -424,23 +428,25 @@ function computeFloorWallDeduplication(rooms = []) {
 
       const isBalconyRoom = room.type === 'balcony' || theme.ceiling === 'open_sky';
 
-      buildRoomWallsWithCutouts(world, {
-        rx,
-        ry: elevation,
-        rz,
-        w: rw,
-        d: rd,
-        h: rh,
-        doors: combinedDoors,
-        windows: layout.windows || [],
-        wallMaterial: wallMat,
-        wallMaterialsByWall,
-        accentColor: room.color || '#3b82f6',
-        roomId: room.id,
-        floorId: floor.id,
-        isBalcony: isBalconyRoom,
-        skipWalls: dedup.skipWalls,
-      });
+      if (!hasCadModel) {
+        buildRoomWallsWithCutouts(world, {
+          rx,
+          ry: elevation,
+          rz,
+          w: rw,
+          d: rd,
+          h: rh,
+          doors: combinedDoors,
+          windows: layout.windows || [],
+          wallMaterial: wallMat,
+          wallMaterialsByWall,
+          accentColor: room.color || '#3b82f6',
+          roomId: room.id,
+          floorId: floor.id,
+          isBalcony: isBalconyRoom,
+          skipWalls: dedup.skipWalls,
+        });
+      }
 
       // 5. Placed Furniture & Custom Objects
       for (const o of layout.objects || []) {

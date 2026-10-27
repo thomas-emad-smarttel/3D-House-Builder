@@ -92,6 +92,10 @@ class House extends Model
             return $env['stairs'];
         }
 
+        if (is_array($env) && ! empty($env['cad_model'])) {
+            return [];
+        }
+
         return static::defaultStairs();
     }
 

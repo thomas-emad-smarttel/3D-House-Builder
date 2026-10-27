@@ -164,8 +164,8 @@ class CadHouseImporter
                 'cad_model' => [
                     'format' => $ext,
                     'original_format' => $originalExt,
-                    'file_path' => Storage::disk($storageDisk)->url($storedPath),
-                    'mtl_path' => $storedMtlPath ? Storage::disk($storageDisk)->url($storedMtlPath) : null,
+                    'file_path' => '/storage/'.$storedPath,
+                    'mtl_path' => $storedMtlPath ? '/storage/'.$storedMtlPath : null,
                     'filename' => $origName.'.'.$ext,
                     'scale' => $scaleFactor,
                     'dimensions' => [
@@ -360,9 +360,16 @@ class CadHouseImporter
     protected static function autoDetectScale(array $dimensions): float
     {
         $maxDim = max($dimensions['w'] ?? 0, $dimensions['d'] ?? 0);
+        $height = $dimensions['h'] ?? 0;
 
         if ($maxDim > 500) {
-            // Millimeters (e.g. 15000mm = 15m)
+            // Check if height in millimeters would be too short for an architectural building (< 2.2m)
+            if ($height > 0 && ($height * 0.001) < 2.2) {
+                // Dimensions are in centimeters (e.g. 5400cm = 54m, 1338cm = 13.38m)
+                return 0.01;
+            }
+
+            // Millimeters (e.g. 15000mm = 15m, height 3500mm = 3.5m)
             return 0.001;
         }
 
@@ -407,41 +414,13 @@ class CadHouseImporter
                                 'floor' => $lvl === 0 ? 'hardwood' : 'parquet',
                                 'wall' => 'plaster',
                                 'wall_color' => '#f8fafc',
-                                'ceiling' => 'gypsum_led',
+                                'ceiling' => 'open_sky',
                                 'ceiling_color' => '#ffffff',
                                 'light' => 'warm',
                                 'brightness' => 1.2,
                             ],
-                            'doors' => [
-                                [
-                                    'id' => "cad-door-main-{$lvl}",
-                                    'wall' => 'south',
-                                    'type' => 'front_entrance',
-                                    'offset' => 0.0,
-                                    'width' => 1.6,
-                                    'height' => 2.4,
-                                    'material' => 'wood',
-                                    'label' => 'Main Entry Doorway',
-                                ],
-                            ],
-                            'windows' => [
-                                [
-                                    'id' => "cad-win-front-{$lvl}",
-                                    'wall' => 'south',
-                                    'offset' => round($width * 0.25, 1),
-                                    'width' => 2.4,
-                                    'height' => 1.8,
-                                    'sill_height' => 0.6,
-                                ],
-                                [
-                                    'id' => "cad-win-back-{$lvl}",
-                                    'wall' => 'north',
-                                    'offset' => 0.0,
-                                    'width' => 3.2,
-                                    'height' => 2.2,
-                                    'sill_height' => 0.4,
-                                ],
-                            ],
+                            'doors' => [],
+                            'windows' => [],
                             'objects' => [],
                         ],
                     ],

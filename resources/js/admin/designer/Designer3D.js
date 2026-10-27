@@ -468,25 +468,28 @@ export class Designer3D {
       });
     }
 
-    // 3. Walls with cutouts for doors and windows
-    const wallMat = getWallMaterial(theme.wall, theme.wall_color);
-    buildRoomWallsWithCutouts(this.world, {
-      rx: 0,
-      ry: 0,
-      rz: 0,
-      w: rw,
-      d: rd,
-      h: rh,
-      doors: layout.doors || [],
-      windows: layout.windows || [],
-      wallMaterial: wallMat,
-      accentColor: room.color || '#3b82f6',
-    });
+    // 3. Walls with cutouts for doors and windows (standard modular houses only)
+    const hasCadModel = !!(this.d.ed?.house?.environment?.cad_model);
+    if (!hasCadModel) {
+      const wallMat = getWallMaterial(theme.wall, theme.wall_color);
+      buildRoomWallsWithCutouts(this.world, {
+        rx: 0,
+        ry: 0,
+        rz: 0,
+        w: rw,
+        d: rd,
+        h: rh,
+        doors: layout.doors || [],
+        windows: layout.windows || [],
+        wallMaterial: wallMat,
+        accentColor: room.color || '#3b82f6',
+      });
+    }
 
     // 3.5. Imported 3D CAD Architectural House Shell (if present)
     const cadModel = this.d.ed?.house?.environment?.cad_model;
     if (cadModel && cadModel.file_path) {
-      loadCadHouseModel(this.world, cadModel, { isDesigner: true });
+      loadCadHouseModel(this.world, cadModel, { isDesigner: false });
     }
 
     // 4. Placed Furniture & Objects
