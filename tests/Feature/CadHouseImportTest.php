@@ -46,8 +46,71 @@ class CadHouseImportTest extends TestCase
 
         $response->assertUnprocessable();
         $response->assertJsonFragment([
-            'message' => "Unsupported CAD format '.pdf'. Supported formats: obj, glb, gltf, dxf, max, zip, rar",
+            'message' => "Unsupported CAD format '.pdf'. Supported formats: fbx, obj, glb, gltf, dxf, max, zip, rar",
         ]);
+    }
+
+    public function test_can_import_fbx_house_with_dimensions_and_bounding_box(): void
+    {
+        $this->actingAs($this->admin());
+        Storage::fake('public');
+
+        // Sample ASCII FBX file for testing
+        $fbxContent = <<<'FBX'
+; FBX 7.4.0 project file
+FBXHeaderExtension:  {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7400
+}
+Definitions:  {
+	Version: 100
+	Count: 2
+}
+Objects:  {
+	Model: "Model::VillaLivingRoom", "Mesh" {
+		Version: 232
+	}
+	Material: "Material::WhitePlaster", "" {
+		Version: 102
+	}
+}
+FBX;
+
+        $file = UploadedFile::fake()->createWithContent('modern_villa.fbx', $fbxContent);
+
+        $response = $this->postJson('/admin/houses/import-cad', [
+            'file' => $file,
+            'title' => 'Imported FBX Villa',
+            'unit_scale' => 'm',
+            'ground_preset' => 'grass',
+            'sky_preset' => 'daylight',
+            'plot_padding' => 6,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonStructure([
+            'message',
+            'house' => [
+                'id',
+                'title',
+                'slug',
+                'plot_width',
+                'plot_depth',
+                'environment',
+                'floors',
+            ],
+            'details' => [
+                'format',
+                'width',
+                'height',
+                'depth',
+            ],
+        ]);
+
+        $house = House::where('title', 'Imported FBX Villa')->first();
+        $this->assertNotNull($house);
+        $this->assertArrayHasKey('cad_model', $house->environment);
+        $this->assertEquals('fbx', $house->environment['cad_model']['format']);
     }
 
     public function test_can_import_obj_house_with_dimensions_and_bounding_box(): void

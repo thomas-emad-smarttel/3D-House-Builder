@@ -10,7 +10,7 @@ use ZipArchive;
 
 class CadHouseImporter
 {
-    public const SUPPORTED_EXTENSIONS = ['obj', 'glb', 'gltf', 'dxf', 'max', 'zip', 'rar'];
+    public const SUPPORTED_EXTENSIONS = ['fbx', 'obj', 'glb', 'gltf', 'dxf', 'max', 'zip', 'rar'];
 
     /**
      * Import a 3D CAD architectural model and generate a complete House project.
@@ -18,6 +18,7 @@ class CadHouseImporter
      * @param  array{
      *     file: UploadedFile,
      *     mtl_file?: ?UploadedFile,
+     *     maps_file?: ?UploadedFile,
      *     title?: ?string,
      *     description?: ?string,
      *     unit_scale?: ?string,
@@ -49,6 +50,7 @@ class CadHouseImporter
         $storageDisk = 'public';
         $subFolder = 'houses/cad';
         $storedMtlPath = null;
+        $storedMapsPath = null;
 
         if ($ext === 'zip') {
             $zipResult = self::extractZipArchive($file->getRealPath(), $subFolder, $storageDisk, $origName);
@@ -57,6 +59,7 @@ class CadHouseImporter
             }
             $storedPath = $zipResult['stored_path'];
             $storedMtlPath = $zipResult['stored_mtl_path'] ?? null;
+            $storedMapsPath = $zipResult['stored_maps_path'] ?? null;
             $ext = $zipResult['ext'];
             $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
         } elseif ($ext === 'rar') {
@@ -66,6 +69,7 @@ class CadHouseImporter
             }
             $storedPath = $rarResult['stored_path'];
             $storedMtlPath = $rarResult['stored_mtl_path'] ?? null;
+            $storedMapsPath = $rarResult['stored_maps_path'] ?? null;
             $ext = $rarResult['ext'];
             $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
         } elseif ($ext === 'max') {
@@ -78,7 +82,7 @@ class CadHouseImporter
             $ext = $maxResult['ext'];
             $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
         } else {
-            // Direct 3D CAD format (obj, glb, gltf, dxf)
+            // Direct 3D CAD format (fbx, obj, glb, gltf, dxf)
             $hashName = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, '')).'.'.$ext;
             $storedPath = $file->storeAs($subFolder, $hashName, $storageDisk);
             $fullDiskPath = Storage::disk($storageDisk)->path($storedPath);
@@ -91,6 +95,49 @@ class CadHouseImporter
                     $mtlHashName = Str::random(16).'_'.Str::slug(Str::limit(pathinfo($mtlFile->getClientOriginalName(), PATHINFO_FILENAME), 30, '')).'.mtl';
                     $storedMtlPath = $mtlFile->storeAs($subFolder, $mtlHashName, $storageDisk);
                 }
+            }
+
+            // Extract companion texture maps archive if provided
+            $sharedMapsAbsDir = public_path('storage/houses/cad/maps');
+            $hasSharedMaps = is_dir($sharedMapsAbsDir) && count(glob($sharedMapsAbsDir.'/*.{jpg,jpeg,png,JPG,PNG}', GLOB_BRACE)) >= 20;
+
+            if (isset($params['maps_file']) && $params['maps_file'] instanceof UploadedFile) {
+                // If server already has the complete texture library installed, reuse it immediately (< 1ms)!
+                if ($hasSharedMaps) {
+                    $storedMapsPath = 'houses/cad/maps';
+                } else {
+                    $mapsFile = $params['maps_file'];
+                    $mapsExt = strtolower($mapsFile->getClientOriginalExtension() ?: $mapsFile->extension());
+                    if (in_array($mapsExt, ['zip', 'rar'], true)) {
+                        $mapsHash = Str::random(12);
+                        $mapsRelDir = "{$subFolder}/maps/{$mapsHash}";
+                        $mapsAbsDir = Storage::disk($storageDisk)->path($mapsRelDir);
+                        @mkdir($mapsAbsDir, 0777, true);
+
+                        if ($mapsExt === 'zip' && class_exists(ZipArchive::class)) {
+                            $zip = new ZipArchive;
+                            if ($zip->open($mapsFile->getRealPath()) === true) {
+                                $zip->extractTo($mapsAbsDir);
+                                $zip->close();
+                                $storedMapsPath = $mapsRelDir;
+                            }
+                        } elseif ($mapsExt === 'rar') {
+                            $unrar = RarExtractor::binaryPath();
+                            if ($unrar) {
+                                // Extract textures quickly with quiet mode (-inul)
+                                $cmd = escapeshellarg($unrar).' e -y -inul -o+ '.escapeshellarg($mapsFile->getRealPath()).' *.jpg *.jpeg *.png *.tif *.bmp '.escapeshellarg($mapsAbsDir.DIRECTORY_SEPARATOR);
+                                @exec($cmd, $o, $c);
+                                if ($c === 0 && count(glob($mapsAbsDir.'/*.{jpg,jpeg,png,JPG,PNG}', GLOB_BRACE)) > 0) {
+                                    $storedMapsPath = $mapsRelDir;
+                                } elseif ($hasSharedMaps) {
+                                    $storedMapsPath = 'houses/cad/maps';
+                                }
+                            }
+                        }
+                    }
+                }
+            } elseif ($hasSharedMaps) {
+                $storedMapsPath = 'houses/cad/maps';
             }
         }
 
@@ -170,6 +217,7 @@ class CadHouseImporter
                     'original_format' => $originalExt,
                     'file_path' => '/storage/'.$storedPath,
                     'mtl_path' => $storedMtlPath ? '/storage/'.$storedMtlPath : null,
+                    'maps_path' => $storedMapsPath ? '/storage/'.$storedMapsPath : (is_dir(public_path('storage/houses/cad/maps')) ? '/storage/houses/cad/maps' : null),
                     'filename' => $origName.'.'.$ext,
                     'scale' => $scaleFactor,
                     'dimensions' => [
@@ -180,6 +228,9 @@ class CadHouseImporter
                     'bbox' => $inspection['bbox'] ?? null,
                     'vertex_count' => $inspection['vertex_count'] ?? 0,
                     'face_count' => $inspection['face_count'] ?? 0,
+                    'materials' => $inspection['materials'] ?? [],
+                    'textures' => $inspection['textures'] ?? [],
+                    'material_textures' => $inspection['material_textures'] ?? [],
                     'decomposed_objects_count' => count($decomposed['furniture']) + count($decomposed['lighting']) + count($decomposed['plants']),
                 ],
             ],
@@ -216,6 +267,21 @@ class CadHouseImporter
      */
     protected static function inspectGeometry(string $filePath, string $extension): array
     {
+        if ($extension === 'fbx') {
+            $parsed = FbxParser::parseFile($filePath);
+            if ($parsed['valid']) {
+                return [
+                    'dimensions' => $parsed['dimensions'] ?? ['w' => 16.0, 'h' => 4.0, 'd' => 14.0],
+                    'bbox' => $parsed['bbox'] ?? null,
+                    'vertex_count' => $parsed['vertex_count'] ?? 0,
+                    'face_count' => $parsed['face_count'] ?? 0,
+                    'sub_objects' => $parsed['sub_objects'] ?? [],
+                    'materials' => $parsed['materials'] ?? [],
+                    'textures' => $parsed['textures'] ?? [],
+                ];
+            }
+        }
+
         if ($extension === 'obj') {
             $parsed = ObjParser::parse($filePath);
             if ($parsed['valid']) {
@@ -887,7 +953,8 @@ class CadHouseImporter
         $mtlIndex = -1;
         $maxIndex = -1;
 
-        $targetExts = ['obj', 'glb', 'gltf', 'dxf'];
+        $targetExts = ['fbx', 'obj', 'glb', 'gltf', 'dxf'];
+        $imageIndices = [];
 
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $entry = $zip->getNameIndex($i);
@@ -902,6 +969,8 @@ class CadHouseImporter
                 $mtlIndex = $i;
             } elseif ($eExt === 'max' && $maxIndex === -1) {
                 $maxIndex = $i;
+            } elseif (in_array($eExt, ['jpg', 'jpeg', 'png', 'tif', 'tga', 'bmp'], true)) {
+                $imageIndices[] = $i;
             }
         }
 
@@ -920,12 +989,25 @@ class CadHouseImporter
                 }
             }
 
+            $storedMapsPath = null;
+            if (! empty($imageIndices)) {
+                $storedMapsPath = "{$subFolder}/maps/{$hashBase}";
+                foreach ($imageIndices as $imgIdx) {
+                    $imgName = basename(str_replace('\\', '/', $zip->getNameIndex($imgIdx)));
+                    $imgData = $zip->getFromIndex($imgIdx);
+                    if ($imgData) {
+                        Storage::disk($storageDisk)->put("{$storedMapsPath}/{$imgName}", $imgData);
+                    }
+                }
+            }
+
             $zip->close();
 
             return [
                 'success' => true,
                 'stored_path' => $modelPath,
                 'stored_mtl_path' => $storedMtlPath,
+                'stored_maps_path' => $storedMapsPath,
                 'ext' => $modelExt,
             ];
         }
@@ -987,6 +1069,20 @@ class CadHouseImporter
             ];
         }
 
+        if (! empty($extracted['fbx_content'])) {
+            $hashBase = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, ''));
+            $fbxPath = "{$subFolder}/{$hashBase}.fbx";
+            Storage::disk($storageDisk)->put($fbxPath, $extracted['fbx_content']);
+
+            return [
+                'success' => true,
+                'stored_path' => $fbxPath,
+                'stored_mtl_path' => null,
+                'stored_maps_path' => null,
+                'ext' => 'fbx',
+            ];
+        }
+
         if (! empty($extracted['obj_content'])) {
             $hashBase = Str::random(16).'_'.Str::slug(Str::limit($origName, 30, ''));
             $objPath = "{$subFolder}/{$hashBase}.obj";
@@ -1002,6 +1098,7 @@ class CadHouseImporter
                 'success' => true,
                 'stored_path' => $objPath,
                 'stored_mtl_path' => $storedMtlPath,
+                'stored_maps_path' => null,
                 'ext' => 'obj',
             ];
         }

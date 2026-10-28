@@ -87,6 +87,8 @@ class RarExtractor
         $files = glob($tempDir.DIRECTORY_SEPARATOR.'*') ?: [];
         $objContent = null;
         $objName = null;
+        $fbxContent = null;
+        $fbxName = null;
         $mtlContent = null;
         $hasMax = false;
         $foundNames = [];
@@ -99,7 +101,10 @@ class RarExtractor
             $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
             $foundNames[] = $base;
 
-            if ($ext === 'obj' && $objContent === null) {
+            if ($ext === 'fbx' && $fbxContent === null) {
+                $fbxContent = file_get_contents($file) ?: null;
+                $fbxName = pathinfo($file, PATHINFO_FILENAME);
+            } elseif ($ext === 'obj' && $objContent === null) {
                 $objContent = file_get_contents($file) ?: null;
                 $objName = pathinfo($file, PATHINFO_FILENAME);
             } elseif ($ext === 'mtl' && $mtlContent === null) {
@@ -113,6 +118,8 @@ class RarExtractor
 
         return [
             'success' => true,
+            'fbx_content' => $fbxContent,
+            'fbx_name' => $fbxName,
             'obj_content' => $objContent,
             'obj_name' => $objName,
             'mtl_content' => $mtlContent,

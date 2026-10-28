@@ -471,13 +471,13 @@ export function objectLibrarySection(ed) {
       catalog.groups.map((g) => el('option', { value: g, text: g, selected: g === 'Furniture' })),
     );
 
-    const fileInput = el('input', { type: 'file', accept: '.svg,.dxf,.dwg,.obj,.mtl,.max,.zip,.rar', multiple: true, hidden: true });
+    const fileInput = el('input', { type: 'file', accept: '.fbx,.svg,.dxf,.dwg,.obj,.mtl,.max,.zip,.rar', multiple: true, hidden: true });
     const mtlFileInput = el('input', { type: 'file', accept: '.mtl', hidden: true });
 
     const dropzone = el('div', { class: 'dropzone' },
       el('div', { class: 'dropzone-icon', text: '📁' }),
-      el('strong', { text: 'Choose or drop 3D Models (.obj / .mtl, .zip, .rar), SVG, or CAD (.dxf) files' }),
-      el('p', { class: 'hint', text: 'Supported: .obj (Wavefront 3D) with .mtl materials, 3D ZIP/RAR packages, .svg, and .dxf (up to 200MB).' }),
+      el('strong', { text: 'Choose or drop 3D Models (.fbx, .obj / .mtl, .zip, .rar), SVG, or CAD (.dxf) files' }),
+      el('p', { class: 'hint', text: 'Supported: .fbx (Autodesk 3D), .obj (Wavefront 3D) with .mtl materials, 3D ZIP/RAR packages, .svg, and .dxf (up to 200MB).' }),
     );
 
     const fileInfoBox = el('div', { style: { display: 'none', margin: '10px 0', padding: '12px 14px', borderRadius: '10px', fontSize: '0.88rem' } });
@@ -644,6 +644,9 @@ export function objectLibrarySection(ed) {
             livePreview.style.display = 'flex';
           };
           reader.readAsText(selectedOtherFile);
+        } else if (ext === 'fbx') {
+          livePreview.innerHTML = '<span style="color:#38bdf8;font-size:3.5rem">🏛️</span>';
+          livePreview.style.display = 'flex';
         } else {
           livePreview.innerHTML = '<span style="color:#38bdf8;font-size:3rem">📐</span>';
           livePreview.style.display = 'flex';

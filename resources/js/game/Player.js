@@ -112,11 +112,11 @@ export class Player {
           continue;
         }
 
-        // A person cannot climb a staircase from the side, but only from the bottom (or descend from top)
-        const atBottomEntrance = (lz >= -0.45 && lz <= 0.65 && Math.abs(this.y - s.startY) <= 0.55);
-        const atTopLanding = (lz >= run - 0.65 && lz <= run + 0.45 && Math.abs(this.y - s.endY) <= 0.55);
-        const alreadyClimbing = (this.onStairId === s.id && lz >= -0.35 && lz <= run + 0.35);
-        const landingOnStairs = (lz >= 0 && lz <= run && Math.abs(this.y - stairY) <= 0.55);
+        // Step onto stairs from bottom entrance, top landing, or while descending
+        const atBottomEntrance = (lz >= -0.65 && lz <= 0.85 && Math.abs(this.y - s.startY) <= 0.85);
+        const atTopLanding = (lz >= run - 0.85 && lz <= run + 0.65 && Math.abs(this.y - s.endY) <= 0.85);
+        const alreadyClimbing = (this.onStairId === s.id && lz >= -0.45 && lz <= run + 0.45);
+        const landingOnStairs = (lz >= -0.2 && lz <= run + 0.2 && Math.abs(this.y - stairY) <= 0.85);
 
         if (atBottomEntrance || atTopLanding || alreadyClimbing || landingOnStairs) {
           let score = 100 - Math.abs(lx) * 15 - Math.abs(this.y - stairY) * 6;
@@ -152,12 +152,22 @@ export class Player {
         for (const slab of world.floorSlabs) {
           // Check if player (x, z) is inside this room or balcony floor slab footprint
           if (this.x >= slab.minX && this.x <= slab.maxX && this.z >= slab.minZ && this.z <= slab.maxZ) {
-            // Check if standing directly over an open stairwell cutout
+            // Check if standing directly over an open stairwell cutout or sunken area void
             if (slab.voidZone) {
               const vz = slab.voidZone;
               if (this.x >= vz.minX && this.x <= vz.maxX && this.z >= vz.minZ && this.z <= vz.maxZ) {
                 continue; // Void hole: player falls through
               }
+            }
+            if (Array.isArray(slab.voidZones)) {
+              let inVoid = false;
+              for (const vz of slab.voidZones) {
+                if (this.x >= vz.minX && this.x <= vz.maxX && this.z >= vz.minZ && this.z <= vz.maxZ) {
+                  inVoid = true;
+                  break;
+                }
+              }
+              if (inVoid) continue;
             }
             // Candidate slab must be at or below player feet
             if (this.y >= slab.elevation - 0.6) {

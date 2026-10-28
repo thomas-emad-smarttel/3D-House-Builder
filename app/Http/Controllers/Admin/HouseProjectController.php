@@ -361,6 +361,7 @@ class HouseProjectController extends Controller
         $validated = $request->validate([
             'file' => ['required', 'file', 'max:204800'],
             'mtl_file' => ['nullable', 'file', 'max:204800'],
+            'maps_file' => ['nullable', 'file', 'max:204800'],
             'title' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:1000'],
             'unit_scale' => ['nullable', 'string', 'in:auto,m,meters,cm,mm,inch,in'],
@@ -373,6 +374,7 @@ class HouseProjectController extends Controller
             $result = CadHouseImporter::import([
                 'file' => $request->file('file'),
                 'mtl_file' => $request->file('mtl_file'),
+                'maps_file' => $request->file('maps_file'),
                 'title' => $validated['title'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'unit_scale' => $validated['unit_scale'] ?? 'auto',

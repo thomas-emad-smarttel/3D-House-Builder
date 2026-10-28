@@ -162,6 +162,45 @@ class LibraryTest extends TestCase
         $this->assertNotEmpty($res->json('object.thumbnail_path'));
     }
 
+    public function test_import_fbx_creates_library_object_with_metadata(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->admin());
+
+        $fbxContent = <<<'FBX'
+; FBX 7.4.0 project file
+FBXHeaderExtension:  {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7400
+}
+Definitions:  {
+	Version: 100
+	Count: 2
+}
+Objects:  {
+	Model: "Model::LoungeArmchair", "Mesh" {
+		Version: 232
+	}
+	Material: "Material::VelvetBlue", "" {
+		Version: 102
+	}
+}
+FBX;
+
+        $file = UploadedFile::fake()->createWithContent('lounge_armchair.fbx', $fbxContent);
+
+        $res = $this->postJson('/admin/library/import', [
+            'file' => $file,
+            'name' => 'Lounge Armchair',
+            'category' => 'Furniture',
+        ])->assertCreated();
+
+        $res->assertJsonPath('object.name', 'Lounge Armchair');
+        $res->assertJsonPath('object.file_type', 'fbx');
+        $this->assertNotEmpty($res->json('object.file_path'));
+        $this->assertNotEmpty($res->json('object.thumbnail_path'));
+    }
+
     public function test_import_dwg_returns_informative_error_guiding_user(): void
     {
         Storage::fake('public');

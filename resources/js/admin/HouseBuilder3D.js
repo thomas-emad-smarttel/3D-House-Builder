@@ -918,7 +918,7 @@ export class HouseBuilder3D {
         ),
         el('p', {
           style: { margin: '0 0 8px', fontSize: '0.78rem', color: '#94a3b8', lineHeight: '1.4' },
-          text: `File: ${cadModel.filename || 'villa+obj.obj'} · Dimensions: ${dims.w}m × ${dims.d}m × ${dims.h}m · ${Number(cadModel.face_count || 0).toLocaleString()} faces`
+          text: `Format: ${(cadModel.format || 'CAD').toUpperCase()} · File: ${cadModel.filename || (cadModel.format === 'fbx' ? 'villa_fbx.fbx' : 'villa_obj.obj')} · ${dims.w}m × ${dims.d}m × ${dims.h}m · ${Number(cadModel.face_count || 0).toLocaleString()} faces`
         }),
         el('div', { style: { marginBottom: '6px' } },
           el('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: '2px' } },

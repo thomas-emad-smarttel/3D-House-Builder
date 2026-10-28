@@ -338,13 +338,19 @@ function openImportCadHouseModal(ed) {
 
   const fileInput = el('input', {
     type: 'file',
-    accept: '.obj,.glb,.gltf,.dxf,.max,.zip,.rar',
+    accept: '.fbx,.obj,.glb,.gltf,.dxf,.max,.zip,.rar',
     style: { display: 'none' },
   });
 
   const mtlInput = el('input', {
     type: 'file',
     accept: '.mtl',
+    style: { display: 'none' },
+  });
+
+  const mapsInput = el('input', {
+    type: 'file',
+    accept: '.zip,.rar',
     style: { display: 'none' },
   });
 
@@ -396,7 +402,7 @@ function openImportCadHouseModal(ed) {
   const fileLabel = el('div', {
     class: 'hint',
     style: { marginTop: '6px', fontWeight: '500', color: '#93c5fd' },
-    text: 'Click or drag & drop .OBJ, .GLB, .GLTF, .DXF, .MAX, or .ZIP/.RAR CAD model',
+    text: 'Click or drag & drop .FBX, .OBJ, .GLB, .GLTF, .DXF, .MAX, or .ZIP/.RAR CAD model',
   });
 
   const dropzone = el('div', {
@@ -450,6 +456,22 @@ function openImportCadHouseModal(ed) {
     el('div', { id: 'mtl-filename', class: 'hint', style: { color: '#cbd5e1', marginTop: '4px' }, text: 'No .mtl file selected (default architectural textures will be applied).' }),
   );
 
+  const mapsSection = el('div', {
+    class: 'field',
+    style: { display: 'none', background: 'rgba(30, 41, 59, 0.3)', padding: '12px', borderRadius: '8px', border: '1px solid #334155' },
+  },
+    el('label', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+      el('span', { text: 'Companion Textures Archive (.zip / .rar) (Optional)' }),
+      el('button', {
+        type: 'button',
+        class: 'btn btn-small',
+        text: 'Browse Maps',
+        onclick: () => mapsInput.click(),
+      }),
+    ),
+    el('div', { id: 'maps-filename', class: 'hint', style: { color: '#cbd5e1', marginTop: '4px' }, text: 'Optional: attach Maps.rar / maps.zip. ⚡ Note: Server texture repository is already installed (/storage/houses/cad/maps, 118 textures), so uploading 400MB Maps.rar is optional and import will be fast (<1s)!' }),
+  );
+
   const handleFileSelection = () => {
     const f = fileInput.files?.[0];
     if (!f) return;
@@ -465,8 +487,13 @@ function openImportCadHouseModal(ed) {
 
     if (ext === 'obj') {
       mtlSection.style.display = 'block';
+      mapsSection.style.display = 'block';
+    } else if (ext === 'fbx') {
+      mtlSection.style.display = 'none';
+      mapsSection.style.display = 'block';
     } else {
       mtlSection.style.display = 'none';
+      mapsSection.style.display = 'none';
     }
 
     if (ext === 'max') {
@@ -513,6 +540,14 @@ function openImportCadHouseModal(ed) {
     }
   };
 
+  mapsInput.onchange = () => {
+    const f = mapsInput.files?.[0];
+    const label = mapsSection.querySelector('#maps-filename');
+    if (label && f) {
+      label.textContent = `Attached: ${f.name} (${(f.size / (1024 * 1024)).toFixed(1)} MB)`;
+    }
+  };
+
   // Progress Bar
   const progressBar = el('div', {
     style: {
@@ -551,6 +586,9 @@ function openImportCadHouseModal(ed) {
       fd.append('file', primaryFile);
       if (mtlInput.files?.[0]) {
         fd.append('mtl_file', mtlInput.files[0]);
+      }
+      if (mapsInput.files?.[0]) {
+        fd.append('maps_file', mapsInput.files[0]);
       }
       if (titleInput.value.trim()) {
         fd.append('title', titleInput.value.trim());
@@ -596,6 +634,7 @@ function openImportCadHouseModal(ed) {
   },
     dropzone,
     mtlSection,
+    mapsSection,
     progressBar,
     el('div', { class: 'field', style: { marginTop: '14px' } }, el('label', { text: 'House Project Title' }), titleInput),
     el('div', { class: 'field' }, el('label', { text: 'Description' }), descInput),

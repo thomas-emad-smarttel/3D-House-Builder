@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Support\CadFormatAdapter;
+use App\Support\FbxParser;
 use App\Support\LibraryStore;
 use App\Support\MaxFormatAdapter;
 use App\Support\ObjParser;
@@ -39,7 +40,7 @@ class LibraryController extends Controller
         return response()->json([
             'objects' => $objects->values()->all(),
             'categories' => LibraryStore::GROUPS,
-            'file_types' => ['builtin', 'svg', 'dxf', 'obj'],
+            'file_types' => ['builtin', 'svg', 'dxf', 'obj', 'fbx'],
             'can_convert_max' => (bool) (env('MAX_CONVERTER_PATH') && is_executable((string) env('MAX_CONVERTER_PATH'))),
         ]);
     }
@@ -296,6 +297,69 @@ class LibraryController extends Controller
                     'entities_count' => $processed['entities_count'] ?? 0,
                     'entities' => $processed['entities'] ?? [],
                     'bbox' => $processed['bbox'] ?? null,
+                ],
+                'definition' => $definition,
+            ]);
+
+            return response()->json(['object' => $item], 201);
+        }
+
+        // 2b. Handle Autodesk FBX 3D Model
+        if ($ext === 'fbx') {
+            $parsed = FbxParser::parseFile($file->getRealPath());
+            if (! $parsed['valid']) {
+                return response()->json([
+                    'message' => 'Invalid 3D FBX file.',
+                    'errors' => ['file' => $parsed['error'] ?? 'The FBX file structure could not be parsed.'],
+                ], 422);
+            }
+
+            $id = 'fbx_'.Str::lower(Str::slug(Str::limit($name, 25, ''))).'_'.Str::lower(Str::random(5));
+            $fbxFileName = "{$id}.fbx";
+            $storageRel = "library/objects/{$fbxFileName}";
+            Storage::disk('public')->putFileAs('library/objects', $file, $fbxFileName);
+
+            $w = (float) ($parsed['suggested']['w'] ?? 2.0);
+            $d = (float) ($parsed['suggested']['d'] ?? 1.0);
+            $h = (float) ($parsed['suggested']['h'] ?? 0.9);
+            $color = '#38bdf8';
+
+            $definition = [
+                'label' => $name,
+                'group' => $category,
+                'icon' => '🏛️',
+                'color' => $color,
+                'shape' => 'rect',
+                'wall' => false,
+                'collide' => 'param',
+                'interactive' => false,
+                'file_type' => 'fbx',
+                'file_path' => '/storage/'.$storageRel,
+                'footprint' => ['w' => 'w', 'd' => 'd'],
+                'params' => [
+                    'w' => ['kind' => 'number', 'label' => 'Width (m)', 'min' => 0.2, 'max' => 50, 'step' => 0.1, 'default' => $w],
+                    'd' => ['kind' => 'number', 'label' => 'Depth (m)', 'min' => 0.2, 'max' => 50, 'step' => 0.1, 'default' => $d],
+                    'h' => ['kind' => 'number', 'label' => 'Height (m)', 'min' => 0.1, 'max' => 20, 'step' => 0.1, 'default' => $h],
+                    'y' => ['kind' => 'number', 'label' => 'Raised by (m)', 'min' => 0, 'max' => 8, 'step' => 0.1, 'default' => 0.0],
+                    'color' => ['kind' => 'color', 'label' => 'Accent colour', 'default' => $color],
+                    'collide' => ['kind' => 'bool', 'label' => 'Solid (cannot walk through)', 'default' => true],
+                ],
+            ];
+
+            $item = $this->library->create([
+                'id' => $id,
+                'name' => $name,
+                'category' => $category,
+                'file_type' => 'fbx',
+                'file_path' => 'storage/'.$storageRel,
+                'thumbnail_path' => $parsed['svg'] ?? null,
+                'metadata' => [
+                    'materials' => $parsed['materials'] ?? [],
+                    'textures' => $parsed['textures'] ?? [],
+                    'vertex_count' => $parsed['vertex_count'] ?? 0,
+                    'face_count' => $parsed['face_count'] ?? 0,
+                    'bbox' => $parsed['bbox'] ?? null,
+                    'dimensions' => $parsed['dimensions'] ?? null,
                 ],
                 'definition' => $definition,
             ]);

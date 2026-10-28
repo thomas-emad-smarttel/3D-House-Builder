@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { M, makeCanvas, FONT_DISPLAY, FONT_BODY } from '../../game/materials.js';
 import { desk, chair, sofa, table, plant, bookshelf, floorLamp, deskMonitor, sign, canvasPlane } from '../../game/props.js';
 import { moduleScreen } from '../../game/props.js';
@@ -77,6 +78,60 @@ function loadObjTemplate(filePath, mtlPath) {
   });
 
   objModelCache.set(cacheKey, promise);
+  return promise;
+}
+
+const fbxModelCache = new Map();
+
+function loadFbxTemplate(filePath) {
+  if (fbxModelCache.has(filePath)) {
+    return fbxModelCache.get(filePath);
+  }
+
+  const promise = new Promise((resolve, reject) => {
+    const manager = new THREE.LoadingManager();
+    manager.setURLModifier((url) => {
+      const clean = url.replace(/\\/g, '/').split('/').pop();
+      if (clean && clean.match(/\.(jpg|jpeg|png|tif|bmp)$/i)) {
+        return `/storage/houses/cad/maps/${clean}`;
+      }
+      return url;
+    });
+    manager.onError = (url) => {
+      console.warn('[FBX] Texture load notice:', url);
+    };
+
+    const loader = new FBXLoader(manager);
+    const origWarn = console.warn;
+    console.warn = (...args) => {
+      const msg = typeof args[0] === 'string' ? args[0] : '';
+      if (
+        msg.includes('THREE.FBXLoader') ||
+        msg.includes('texmap_') ||
+        msg.includes('MeshPhongMaterial') ||
+        msg.includes('map is not supported in three.js') ||
+        msg.includes('unknown material type')
+      ) {
+        return;
+      }
+      origWarn.apply(console, args);
+    };
+
+    loader.load(
+      filePath,
+      (loaded) => {
+        console.warn = origWarn;
+        resolve(loaded);
+      },
+      undefined,
+      (err) => {
+        console.warn = origWarn;
+        reject(err);
+      }
+    );
+  });
+
+  fbxModelCache.set(filePath, promise);
   return promise;
 }
 
@@ -451,6 +506,92 @@ export const BUILDERS = {
       .then((template) => attachObj(template))
       .catch((err) => {
         console.warn(`[3D] Failed to load OBJ ${filePath}:`, err);
+      });
+  },
+
+  fbx(world, room, o, ctx, passedDef) {
+    const def = passedDef || typeDef(o.library_id || o.type);
+    const p = o.p || {};
+    const w = Number(p.w || 2);
+    const d = Number(p.d || 1);
+    const h = Number(p.h || 0.9);
+    const y = Number(p.y || 0);
+    const rotY = RADIANS(o.rot || 0);
+    const color = p.color || def?.color || '#38bdf8';
+    const solid = !!p.collide;
+
+    if (solid) {
+      world.collider(o.x, o.z, w, d, rotY, y, y + h);
+    }
+
+    const container = new THREE.Group();
+    container.position.set(o.x, y, o.z);
+    container.rotation.y = rotY;
+    world.scene.add(container);
+
+    const geom = new THREE.BoxGeometry(w, h, d);
+    const mat = M.solid(color, { rough: 0.5, metal: 0.1 });
+    const placeholder = new THREE.Mesh(geom, mat);
+    placeholder.position.y = h / 2;
+    placeholder.castShadow = true;
+    placeholder.receiveShadow = true;
+    container.add(placeholder);
+
+    const rawPath = def?.file_path || def?.definition?.file_path;
+    const filePath = rawPath ? (rawPath.startsWith('/') ? rawPath : '/' + rawPath) : null;
+
+    if (typeof window === 'undefined' || !filePath) {
+      return;
+    }
+
+    loadFbxTemplate(filePath)
+      .then((template) => {
+        try {
+          const loaded = template.clone(true);
+          const box = new THREE.Box3().setFromObject(loaded);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+
+          loaded.position.x = -center.x;
+          loaded.position.y = -box.min.y;
+          loaded.position.z = -center.z;
+
+          const sx = size.x > 0.0001 ? w / size.x : 1;
+          const sy = size.y > 0.0001 ? h / size.y : 1;
+          const sz = size.z > 0.0001 ? d / size.z : 1;
+
+          const wrapper = new THREE.Group();
+          wrapper.add(loaded);
+          wrapper.scale.set(sx, sy, sz);
+
+          loaded.traverse((child) => {
+            if (child.isMesh) {
+              const faceCount = child.geometry?.index
+                ? (child.geometry.index.count / 3)
+                : (child.geometry?.attributes?.position?.count / 3 || 0);
+              child.castShadow = faceCount < 50000;
+              child.receiveShadow = true;
+              if (child.material) {
+                if (Array.isArray(child.material)) {
+                  child.material.forEach((m) => { m.side = THREE.DoubleSide; });
+                } else {
+                  child.material.side = THREE.DoubleSide;
+                }
+              }
+            }
+          });
+
+          container.remove(placeholder);
+          placeholder.geometry?.dispose();
+          container.add(wrapper);
+        } catch (err) {
+          console.warn(`[3D] Failed to attach FBX mesh for ${o.id}:`, err);
+        }
+      })
+      .catch((err) => {
+        console.warn(`[3D] Failed to load FBX ${filePath}:`, err);
       });
   },
 };
