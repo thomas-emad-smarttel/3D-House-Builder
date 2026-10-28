@@ -54,8 +54,6 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   if (
     allNames.includes('object2652') ||
     allNames.includes('object2658') ||
-    allNames.includes('012_box061') ||
-    allNames.includes('_012_box061') ||
     allNames.includes('013_box016') ||
     allNames.includes('_013_box016') ||
     allNames.includes('plane009') ||
@@ -65,6 +63,32 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     mesh.visible = false;
     mesh.castShadow = false;
     mesh.receiveShadow = false;
+    return;
+  }
+
+  // Boundary Enclosure Walls (_012_Box061 / 012_Box061)
+  if (allNames.includes('012_box061') || allNames.includes('_012_box061')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#475569'),
+      roughness: 0.85,
+      metalness: 0.1,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
+
+  // Basement garage roll-up shutter door (Object2657)
+  if (allNames.includes('object2657') || allNames.includes('garage')) {
+    mesh.material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#e2e8f0'),
+      metalness: 0.7,
+      roughness: 0.3,
+      side: THREE.DoubleSide,
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     return;
   }
 
@@ -261,108 +285,203 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
 }
 
 /**
- * Decomposes a multi-wall compound mesh BufferGeometry into separate connected box colliders.
+ * Decomposes a multi-wall compound mesh BufferGeometry into separate solid planar wall colliders.
  */
 function decomposeMeshToBoxes(mesh, worldMatrix) {
   const geo = mesh.geometry;
   if (!geo || !geo.attributes || !geo.attributes.position) return [];
   const pos = geo.attributes.position;
   const count = pos.count;
-  if (count > 8000) return []; // avoid extremely dense meshes
+  if (count > 30000) return []; // avoid excessively dense decorative props
 
   const index = geo.index;
   const numTris = index ? index.count / 3 : count / 3;
-  if (numTris > 2500) return [];
+  if (numTris > 20000) return [];
 
-  // Group triangles sharing vertices
-  const getVertexKey = (idx) => {
-    const vx = Math.round(pos.getX(idx) * 40);
-    const vy = Math.round(pos.getY(idx) * 40);
-    const vz = Math.round(pos.getZ(idx) * 40);
-    return `${vx}_${vy}_${vz}`;
-  };
+  const v0 = new THREE.Vector3();
+  const v1 = new THREE.Vector3();
+  const v2 = new THREE.Vector3();
+  const rawBoxes = [];
 
-  const v2f = new Map();
   for (let f = 0; f < numTris; f++) {
-    for (let k = 0; k < 3; k++) {
-      const vi = index ? index.getX(f * 3 + k) : f * 3 + k;
-      const key = getVertexKey(vi);
-      let arr = v2f.get(key);
-      if (!arr) {
-        arr = [];
-        v2f.set(key, arr);
-      }
-      arr.push(f);
-    }
-  }
+    const i0 = index ? index.getX(f * 3) : f * 3;
+    const i1 = index ? index.getX(f * 3 + 1) : f * 3 + 1;
+    const i2 = index ? index.getX(f * 3 + 2) : f * 3 + 2;
 
-  const parent = new Int32Array(numTris);
-  for (let i = 0; i < numTris; i++) parent[i] = i;
-  const find = (i) => {
-    while (i !== parent[i]) {
-      parent[i] = parent[parent[i]];
-      i = parent[i];
-    }
-    return i;
-  };
-  const union = (i, j) => {
-    const ri = find(i);
-    const rj = find(j);
-    if (ri !== rj) parent[ri] = rj;
-  };
+    v0.set(pos.getX(i0), pos.getY(i0), pos.getZ(i0)).applyMatrix4(worldMatrix);
+    v1.set(pos.getX(i1), pos.getY(i1), pos.getZ(i1)).applyMatrix4(worldMatrix);
+    v2.set(pos.getX(i2), pos.getY(i2), pos.getZ(i2)).applyMatrix4(worldMatrix);
 
-  for (const flist of v2f.values()) {
-    const first = flist[0];
-    for (let k = 1; k < flist.length; k++) {
-      union(first, flist[k]);
-    }
-  }
+    const minX = Math.min(v0.x, v1.x, v2.x);
+    const maxX = Math.max(v0.x, v1.x, v2.x);
+    const minY = Math.min(v0.y, v1.y, v2.y);
+    const maxY = Math.max(v0.y, v1.y, v2.y);
+    const minZ = Math.min(v0.z, v1.z, v2.z);
+    const maxZ = Math.max(v0.z, v1.z, v2.z);
 
-  const groups = new Map();
-  for (let f = 0; f < numTris; f++) {
-    const root = find(f);
-    let g = groups.get(root);
-    if (!g) {
-      g = [];
-      groups.set(root, g);
-    }
-    g.push(f);
-  }
+    const h = maxY - minY;
+    const w = maxX - minX;
+    const d = maxZ - minZ;
 
-  const vLocal = new THREE.Vector3();
-  const boxes = [];
-
-  for (const flist of groups.values()) {
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    let minZ = Infinity, maxZ = -Infinity;
-
-    for (const f of flist) {
-      for (let k = 0; k < 3; k++) {
-        const vi = index ? index.getX(f * 3 + k) : f * 3 + k;
-        vLocal.set(pos.getX(vi), pos.getY(vi), pos.getZ(vi));
-        vLocal.applyMatrix4(worldMatrix);
-
-        if (vLocal.x < minX) minX = vLocal.x; if (vLocal.x > maxX) maxX = vLocal.x;
-        if (vLocal.y < minY) minY = vLocal.y; if (vLocal.y > maxY) maxY = vLocal.y;
-        if (vLocal.z < minZ) minZ = vLocal.z; if (vLocal.z > maxZ) maxZ = vLocal.z;
+    // Real architectural vertical walls and pillars (height at least 0.7m)
+    if (h >= 0.7 && maxY >= -2.8) {
+      if (w <= 0.45 && d >= 0.25) {
+        rawBoxes.push({
+          minX: minX - 0.15,
+          maxX: maxX + 0.15,
+          minY,
+          maxY,
+          minZ,
+          maxZ,
+          dir: 'Z',
+          enabled: true,
+        });
+      } else if (d <= 0.45 && w >= 0.25) {
+        rawBoxes.push({
+          minX,
+          maxX,
+          minY,
+          maxY,
+          minZ: minZ - 0.15,
+          maxZ: maxZ + 0.15,
+          dir: 'X',
+          enabled: true,
+        });
+      } else if (Math.min(w, d) <= 1.5 && Math.max(w, d) <= 4.0) {
+        rawBoxes.push({
+          minX,
+          maxX,
+          minY,
+          maxY,
+          minZ,
+          maxZ,
+          dir: 'box',
+          enabled: true,
+        });
       }
     }
+  }
+
+  // Merge collinear adjacent wall boxes
+  const merged = [];
+  for (const b of rawBoxes) {
+    let found = false;
+    for (const m of merged) {
+      if (m.dir === b.dir && Math.abs(m.minY - b.minY) < 0.35 && Math.abs(m.maxY - b.maxY) < 0.35) {
+        if (m.dir === 'Z' && Math.abs(m.minX - b.minX) < 0.25 && Math.abs(m.maxX - b.maxX) < 0.25) {
+          if (b.minZ <= m.maxZ + 0.25 && b.maxZ >= m.minZ - 0.25) {
+            m.minZ = Math.min(m.minZ, b.minZ);
+            m.maxZ = Math.max(m.maxZ, b.maxZ);
+            found = true;
+            break;
+          }
+        } else if (m.dir === 'X' && Math.abs(m.minZ - b.minZ) < 0.25 && Math.abs(m.maxZ - b.maxZ) < 0.25) {
+          if (b.minX <= m.maxX + 0.25 && b.maxX >= m.minX - 0.25) {
+            m.minX = Math.min(m.minX, b.minX);
+            m.maxX = Math.max(m.maxX, b.maxX);
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!found) {
+      merged.push({ ...b });
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Clusters horizontal railing bars and vertical posts into solid barrier colliders.
+ */
+function extractRailingBoxes(mesh, worldMatrix) {
+  const geo = mesh.geometry;
+  if (!geo || !geo.attributes || !geo.attributes.position) return [];
+  const pos = geo.attributes.position;
+  const index = geo.index;
+  const numTris = index ? index.count / 3 : pos.count / 3;
+  if (numTris > 20000) return [];
+
+  const v0 = new THREE.Vector3();
+  const v1 = new THREE.Vector3();
+  const v2 = new THREE.Vector3();
+  const bars = [];
+
+  for (let f = 0; f < numTris; f++) {
+    const i0 = index ? index.getX(f * 3) : f * 3;
+    const i1 = index ? index.getX(f * 3 + 1) : f * 3 + 1;
+    const i2 = index ? index.getX(f * 3 + 2) : f * 3 + 2;
+
+    v0.set(pos.getX(i0), pos.getY(i0), pos.getZ(i0)).applyMatrix4(worldMatrix);
+    v1.set(pos.getX(i1), pos.getY(i1), pos.getZ(i1)).applyMatrix4(worldMatrix);
+    v2.set(pos.getX(i2), pos.getY(i2), pos.getZ(i2)).applyMatrix4(worldMatrix);
+
+    const minX = Math.min(v0.x, v1.x, v2.x);
+    const maxX = Math.max(v0.x, v1.x, v2.x);
+    const minY = Math.min(v0.y, v1.y, v2.y);
+    const maxY = Math.max(v0.y, v1.y, v2.y);
+    const minZ = Math.min(v0.z, v1.z, v2.z);
+    const maxZ = Math.max(v0.z, v1.z, v2.z);
 
     const w = maxX - minX;
     const d = maxZ - minZ;
-    const h = maxY - minY;
-
-    // Real architectural vertical walls, pillars, structural columns, and glass facades
-    // Exclude floor slabs, low steps, curbs, and plinths (must reach at least 1.0m height and h >= 0.7m)
-    if (minY < 2.5 && h >= 0.7 && maxY >= 1.0) {
-      if (Math.min(w, d) <= 2.2) {
-        boxes.push({ minX, maxX, minZ, maxZ, minY, maxY, enabled: true });
-      }
+    if (w >= 0.4 || d >= 0.4) {
+      bars.push({
+        minX,
+        maxX,
+        minY,
+        maxY,
+        minZ,
+        maxZ,
+        isZ: d >= w,
+        centerX: (minX + maxX) / 2,
+        centerZ: (minZ + maxZ) / 2,
+      });
     }
   }
 
-  return boxes;
+  const clusters = [];
+  for (const b of bars) {
+    let found = false;
+    for (const c of clusters) {
+      if (c.isZ === b.isZ) {
+        if (c.isZ) {
+          if (Math.abs(c.centerX - b.centerX) < 0.3 && b.minZ <= c.maxZ + 0.5 && b.maxZ >= c.minZ - 0.5) {
+            c.minZ = Math.min(c.minZ, b.minZ);
+            c.maxZ = Math.max(c.maxZ, b.maxZ);
+            c.minY = Math.min(c.minY, b.minY);
+            c.maxY = Math.max(c.maxY, b.maxY);
+            found = true;
+            break;
+          }
+        } else {
+          if (Math.abs(c.centerZ - b.centerZ) < 0.3 && b.minX <= c.maxX + 0.5 && b.maxX >= c.minX - 0.5) {
+            c.minX = Math.min(c.minX, b.minX);
+            c.maxX = Math.max(c.maxX, b.maxX);
+            c.minY = Math.min(c.minY, b.minY);
+            c.maxY = Math.max(c.maxY, b.maxY);
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!found) {
+      clusters.push({ ...b });
+    }
+  }
+
+  return clusters.map((c) => ({
+    minX: c.isZ ? c.centerX - 0.15 : c.minX,
+    maxX: c.isZ ? c.centerX + 0.15 : c.maxX,
+    minZ: !c.isZ ? c.centerZ - 0.15 : c.minZ,
+    maxZ: !c.isZ ? c.centerZ + 0.15 : c.maxZ,
+    minY: c.minY - 0.1,
+    maxY: Math.max(c.maxY, c.minY + 0.95),
+    enabled: true,
+  }));
 }
 
 /**
@@ -469,7 +588,7 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
       if (
         b.maxX >= (dC.x - xTol) && b.minX <= (dC.x + xTol) &&
         b.maxZ >= (dC.z - zTol) && b.minZ <= (dC.z + zTol) &&
-        Math.abs(b.minY - aBox.min.y) < 1.5
+        b.minY < (dC.y + 1.1) && b.maxY > (dC.y - 1.1)
       ) {
         return true;
       }
@@ -477,13 +596,29 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     return false;
   };
 
-  // Add real solid wall and column colliders
+  // Add real solid wall, column, railing, and boundary colliders
   wrapper.traverse((child) => {
     if (!child.isMesh || !child.visible) return;
 
     const lname = (child.name || '').toLowerCase();
     const parentName = (child.parent?.name || '').toLowerCase();
     const allNames = `${lname} ${parentName}`;
+
+    // Black metal railings and garden walkway fences (06_metal_)
+    if (
+      allNames.includes('06_metal') ||
+      allNames.includes('railing') ||
+      allNames.includes('fence') ||
+      allNames.includes('balustrade')
+    ) {
+      const railingBoxes = extractRailingBoxes(child, child.matrixWorld);
+      for (const rb of railingBoxes) {
+        if (!isExcludedCorridor(rb)) {
+          world.colliders.push(rb);
+        }
+      }
+      return;
+    }
 
     if (
       allNames.includes('ground') ||
@@ -512,6 +647,7 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
       allNames.includes('cgaxis_door') ||
       allNames.includes('gate') ||
       lname === 'object2659' ||
+      lname === 'object2657' ||
       lname === 'box318' ||
       lname === 'object027'
     ) {
@@ -523,12 +659,28 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     const d = box.max.z - box.min.z;
     const h = box.max.y - box.min.y;
 
-    if (box.min.y >= 2.5 || box.max.y <= 0.55) return;
-    if (w > 20 && d > 20 && h < 1.0) return;
+    if (box.max.y <= -2.8 || box.min.y >= 12.0) return;
+    if (w > 25 && d > 25 && h < 1.0) return; // Overall plinth
 
     const minDim = Math.min(w, d);
 
-    if (minDim <= 2.2 && h >= 0.7 && box.max.y >= 1.0) {
+    // Multi-wall compound assemblies or wide building shells (e.g. 01_wall_white, 02_wall_gray, _012_Box061)
+    if (
+      allNames.includes('012_box061') ||
+      allNames.includes('_012_box061') ||
+      allNames.includes('wall') ||
+      minDim > 2.2
+    ) {
+      const subBoxes = decomposeMeshToBoxes(child, child.matrixWorld);
+      for (const sb of subBoxes) {
+        if (!isExcludedCorridor(sb)) {
+          world.colliders.push(sb);
+        }
+      }
+      return;
+    }
+
+    if (minDim <= 2.2 && h >= 0.7 && box.max.y >= -2.5) {
       if (!isExcludedCorridor(box)) {
         world.colliders.push({
           minX: box.min.x,
@@ -539,13 +691,6 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
           maxY: box.max.y,
           enabled: true,
         });
-      }
-    } else if (minDim > 2.2) {
-      const subBoxes = decomposeMeshToBoxes(child, child.matrixWorld);
-      for (const sb of subBoxes) {
-        if (!isExcludedCorridor(sb)) {
-          world.colliders.push(sb);
-        }
       }
     }
   });
@@ -655,6 +800,65 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
       });
     }
   }
+
+  // Setup interactive Basement Garage Shutter Door (Object2657)
+  wrapper.traverse((child) => {
+    if (!child.isMesh) return;
+    const lname = (child.name || '').toLowerCase();
+    if (lname === 'object2657' || lname.includes('garage')) {
+      const gBox = new THREE.Box3().setFromObject(child);
+      const gCenter = new THREE.Vector3();
+      gBox.getCenter(gCenter);
+
+      const garageCollider = {
+        minX: gBox.min.x - 0.1,
+        maxX: gBox.max.x + 0.1,
+        minZ: gBox.min.z - 0.2,
+        maxZ: gBox.max.z + 0.2,
+        minY: gBox.min.y,
+        maxY: gBox.max.y,
+        enabled: true,
+      };
+      world.colliders.push(garageCollider);
+
+      if (typeof world.interact === 'function') {
+        let isGarageOpen = false;
+        const initialY = child.position.y;
+        const rollHeight = (gBox.max.y - gBox.min.y) / (options.scale || 0.01);
+
+        const garageInteract = world.interact({
+          x: gCenter.x,
+          y: gCenter.y,
+          z: gCenter.z,
+          radius: 6.5,
+          cardRadius: 9.5,
+          label: 'Press E to open garage door',
+          action: () => {
+            isGarageOpen = !isGarageOpen;
+            garageCollider.enabled = !isGarageOpen;
+            garageInteract.label = isGarageOpen ? 'Press E to close garage door' : 'Press E to open garage door';
+            if (world.ctx?.game?.interactions?.current === garageInteract) {
+              world.ctx.game.ui.hud.setPrompt(garageInteract.label);
+            }
+
+            const startTime = performance.now();
+            const duration = 600;
+            const animate = (now) => {
+              const t = Math.min(1, (now - startTime) / duration);
+              const ease = 1 - Math.pow(1 - t, 3);
+              child.position.y = isGarageOpen
+                ? initialY + rollHeight * ease
+                : initialY + rollHeight * (1 - ease);
+              if (t < 1) {
+                requestAnimationFrame(animate);
+              }
+            };
+            requestAnimationFrame(animate);
+          },
+        });
+      }
+    }
+  });
 }
 
 const cadModelTemplateCache = new Map();
@@ -825,6 +1029,26 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
 
   // Solid floor slab colliders for walking physics inside and around the CAD house
   if (world && world.floorSlabs && !options.isDesigner) {
+    // 0. Sunken garden patio terrace floor slab at Y = -1.35m
+    world.floorSlabs.push({
+      minX: -18.5,
+      maxX: -7.5,
+      minZ: -26.0,
+      maxZ: -0.5,
+      elevation: -1.35,
+      voidZone: null,
+    });
+
+    // 0b. Basement garage floor slab at Y = -3.00m
+    world.floorSlabs.push({
+      minX: -8.5,
+      maxX: 0.5,
+      minZ: 12.0,
+      maxZ: 19.0,
+      elevation: -3.00,
+      voidZone: null,
+    });
+
     // 1. Overall ground / driveway / garden lawn level at Y = 0.0m
     world.floorSlabs.push({
       minX: -modelWidth / 2 - 8.0,
@@ -871,7 +1095,7 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
     });
   }
 
-  // Register entrance steps so player smoothly climbs from Y=0.0 up to Y=0.45
+  // Register entrance steps, garage ramp, and patio stairs
   if (world && world.stairs && !options.isDesigner) {
     const hasEntranceStairs = world.stairs.some((s) => s.id === 'stairs-entrance');
     if (!hasEntranceStairs) {
@@ -882,7 +1106,7 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
         startY: 0.0,
         startZ: 13.6, // bottom on driveway
         endX: 12.0,
-        endY: 0.45,  // top on entrance porch landing
+        endY: 0.45, // top on entrance porch landing
         endZ: 11.6,
         width: 3.4,
         steps: 4,
@@ -897,6 +1121,60 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
         halfWidth: 1.7,
         bottom: { x: 12.0, y: 0.0, z: 13.6 },
         top: { x: 12.0, y: 0.45, z: 11.6 },
+      });
+    }
+
+    const hasGarageRamp = world.stairs.some((s) => s.id === 'ramp-garage');
+    if (!hasGarageRamp) {
+      world.stairs.push({
+        id: 'ramp-garage',
+        name: 'Basement Garage Driveway Ramp',
+        startX: -4.0,
+        startY: 0.0,
+        startZ: 39.6, // street level
+        endX: -4.0,
+        endY: -3.0,
+        endZ: 18.2, // garage level
+        width: 7.4,
+        steps: 1,
+        style: 'stone_steps',
+        run: 21.4,
+        dx: 0,
+        dz: -21.4,
+        ux: 0,
+        uz: -1,
+        vx: 1,
+        vz: 0,
+        halfWidth: 3.7,
+        bottom: { x: -4.0, y: 0.0, z: 39.6 },
+        top: { x: -4.0, y: -3.0, z: 18.2 },
+      });
+    }
+
+    const hasPatioStairs = world.stairs.some((s) => s.id === 'stairs-patio');
+    if (!hasPatioStairs) {
+      world.stairs.push({
+        id: 'stairs-patio',
+        name: 'Sunken Patio Garden Steps',
+        startX: -13.4,
+        startY: 0.0,
+        startZ: 1.6, // ground/porch level
+        endX: -13.4,
+        endY: -1.35,
+        endZ: -0.85, // sunken patio level
+        width: 4.5,
+        steps: 8,
+        style: 'stone_steps',
+        run: 2.45,
+        dx: 0,
+        dz: -2.45,
+        ux: 0,
+        uz: -1,
+        vx: 1,
+        vz: 0,
+        halfWidth: 2.25,
+        bottom: { x: -13.4, y: 0.0, z: 1.6 },
+        top: { x: -13.4, y: -1.35, z: -0.85 },
       });
     }
   }

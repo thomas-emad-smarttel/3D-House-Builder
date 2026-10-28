@@ -119,7 +119,7 @@ class CadHouseImporter
         $decomposed = self::classifySubObjects($inspection['sub_objects'] ?? [], $scaleFactor, $inspection['bbox'] ?? null);
 
         // 5. Estimate stories and build floor layout with discrete decomposed items
-        $floorsData = self::generateFloorsLayout($width, $depth, $height, $decomposed);
+        $floorsData = self::generateFloorsLayout($width, $depth, $height, $decomposed, $inspection, $scaleFactor);
 
         // 6. Environment styling presets
         $skyPreset = $params['sky_preset'] ?? 'daylight';
@@ -464,8 +464,8 @@ class CadHouseImporter
             }
 
             // 2. Interactive Doors & Entrance Portals
-            if (str_contains($lname, 'door') || str_contains($lname, 'gate')) {
-                if ($w < 0.4 && $d < 0.4) {
+            if (str_contains($lname, 'door') || str_contains($lname, 'gate') || str_contains($lname, '2657') || str_contains($lname, 'garage')) {
+                if ($h < 1.6 || ($w < 0.4 && $d < 0.4)) {
                     continue;
                 }
                 $doors[] = [
@@ -625,8 +625,12 @@ class CadHouseImporter
         foreach ($unifiedDoors as $u) {
             $doorW = max(1.2, round($u['maxX'] - $u['minX'], 2));
             $doorH = max(2.1, round($u['maxY'] - $u['minY'], 2));
+            $isGarage = str_contains(strtolower($u['mesh_name'] ?? ''), '2657') || $u['y'] < -2.4;
             $isEntrance = abs($u['z'] - 9.9) < 6.0 || $u['z'] > 0;
-            if ($isEntrance) {
+            if ($isGarage) {
+                $slugId = 'cad-door-basement-garage';
+                $title = 'Basement Garage Shutter Door';
+            } elseif ($isEntrance) {
                 $entranceCount++;
                 $slugId = $entranceCount === 1 ? 'cad-door-front-entrance' : "cad-door-front-entrance-{$entranceCount}";
                 $title = $entranceCount === 1 ? 'Front Entrance Double Door' : "Front Entrance Double Door ({$entranceCount})";
@@ -683,7 +687,7 @@ class CadHouseImporter
      * }  $decomposed
      * @return list<array<string, mixed>>
      */
-    protected static function generateFloorsLayout(float $width, float $depth, float $height, array $decomposed = []): array
+    protected static function generateFloorsLayout(float $width, float $depth, float $height, array $decomposed = [], ?array $inspection = null, float $scaleFactor = 1.0): array
     {
         $stories = max(1, min(6, (int) round($height / 3.4)));
         $floors = [];
@@ -694,6 +698,75 @@ class CadHouseImporter
             $decomposed['plants'] ?? []
         );
 
+        $hasBasement = false;
+        if ($inspection && isset($inspection['bbox']['min_y'])) {
+            $minY = (float) $inspection['bbox']['min_y'] * $scaleFactor;
+            if ($minY < -0.8) {
+                $hasBasement = true;
+            }
+        }
+        if (! $hasBasement) {
+            foreach (($decomposed['doors'] ?? []) as $dr) {
+                if (((float) ($dr['y'] ?? 0.0)) < -0.8) {
+                    $hasBasement = true;
+                    break;
+                }
+            }
+        }
+        if (! $hasBasement) {
+            foreach (($decomposed['furniture'] ?? []) as $fn) {
+                if (((float) ($fn['y'] ?? 0.0)) < -0.8) {
+                    $hasBasement = true;
+                    break;
+                }
+            }
+        }
+
+        if ($hasBasement) {
+            $basementItems = array_values(array_filter($allItems, function ($item) {
+                return ((float) ($item['y'] ?? 0.0)) < -0.5;
+            }));
+            $basementDoors = array_values(array_filter($decomposed['doors'] ?? [], function ($door) {
+                return ((float) ($door['y'] ?? 0.0)) < -0.5;
+            }));
+
+            $floors[] = [
+                'id' => 'cad-floor-basement',
+                'name' => 'Lower Floor (Basement & Sunken Patio)',
+                'level' => -1,
+                'height' => 3.0,
+                'elevation' => -3.0,
+                'rooms' => [
+                    [
+                        'id' => 'cad-room-basement',
+                        'name' => 'Basement Garage & Sunken Courtyard',
+                        'type' => 'garage',
+                        'floor_id' => 'cad-floor-basement',
+                        'elevation' => -3.0,
+                        'height' => 3.0,
+                        'color' => '#64748b',
+                        'opacity' => 1.0,
+                        'layout' => [
+                            'size' => ['w' => $width, 'd' => $depth, 'h' => 3.0],
+                            'position' => ['x' => 0.0, 'z' => 0.0],
+                            'theme' => [
+                                'floor' => 'concrete',
+                                'wall' => 'stone',
+                                'wall_color' => '#94a3b8',
+                                'ceiling' => 'open_sky',
+                                'ceiling_color' => '#ffffff',
+                                'light' => 'cool',
+                                'brightness' => 1.0,
+                            ],
+                            'doors' => $basementDoors,
+                            'windows' => [],
+                            'objects' => $basementItems,
+                        ],
+                    ],
+                ],
+            ];
+        }
+
         for ($lvl = 0; $lvl < $stories; $lvl++) {
             $elev = round($lvl * 3.4, 2);
             $floorName = $lvl === 0 ? 'Ground Level (Foundation)' : "Floor {$lvl} (Upper Level)";
@@ -702,7 +775,7 @@ class CadHouseImporter
             $floorObjects = array_values(array_filter($allItems, function ($item) use ($lvl, $stories) {
                 $itemY = (float) ($item['y'] ?? 0.0);
                 if ($lvl === 0) {
-                    return $itemY < 3.0 || $stories === 1;
+                    return ($itemY >= -0.5 && $itemY < 3.0) || ($stories === 1 && $itemY >= -0.5);
                 }
 
                 return $itemY >= ($lvl * 3.4 - 0.5) && $itemY < (($lvl + 1) * 3.4);
@@ -712,7 +785,7 @@ class CadHouseImporter
             $floorDoors = array_values(array_filter($decomposed['doors'] ?? [], function ($door) use ($lvl) {
                 $doorY = (float) ($door['y'] ?? 0.0);
                 if ($lvl === 0) {
-                    return $doorY < 3.0;
+                    return $doorY >= -0.5 && $doorY < 3.0;
                 }
 
                 return $doorY >= 3.0;
