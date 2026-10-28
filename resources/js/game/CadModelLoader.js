@@ -139,11 +139,9 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
   // 9. Streetlamps & Exterior Lighting fixtures
   if (allNames.includes('streetlamp') || allNames.includes('lamp') || allNames.includes('light')) {
     mesh.material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#0f172a'),
-      metalness: 0.9,
-      roughness: 0.25,
-      emissive: new THREE.Color('#fef08a'),
-      emissiveIntensity: 0.6,
+      color: new THREE.Color('#1e293b'), // Architectural dark cast-iron / matte black
+      metalness: 0.85,
+      roughness: 0.35,
       side: THREE.DoubleSide,
     });
     mesh.castShadow = false;
