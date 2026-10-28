@@ -320,7 +320,9 @@ function decomposeMeshToBoxes(mesh, worldMatrix) {
     const d = maxZ - minZ;
     const h = maxY - minY;
 
-    if (minY < 2.5 && h >= 0.4 && minY <= 1.8 && maxY >= 0.3) {
+    // Real architectural vertical walls, pillars, structural columns, and glass facades
+    // Exclude floor slabs, low steps, curbs, and plinths (must reach at least 1.0m height and h >= 0.7m)
+    if (minY < 2.5 && h >= 0.7 && maxY >= 1.0) {
       if (Math.min(w, d) <= 2.2) {
         boxes.push({ minX, maxX, minZ, maxZ, minY, maxY, enabled: true });
       }
@@ -348,7 +350,7 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     const parentName = (child.parent?.name || '').toLowerCase();
     const allNames = `${lname} ${parentName}`;
 
-    // Skip walkable ground, grass, water, ceilings, small props, interior slabs, entrance steps
+    // Skip walkable ground, grass, water, ceilings, small props, interior slabs, entrance steps, curbs, plinths
     if (
       allNames.includes('ground') ||
       allNames.includes('grass') ||
@@ -367,8 +369,11 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
       allNames.includes('object2652') ||
       allNames.includes('object2667') || // Interior floor slab at Y = 0.45m
       allNames.includes('line008') ||    // Grand entrance flight steps
+      allNames.includes('box019') ||     // Grand entrance flight step riser
+      allNames.includes('object2668') || // Porch plinth finish
       allNames.includes('steps') ||
-      allNames.includes('stair')
+      allNames.includes('stair') ||
+      allNames.includes('plinth')
     ) {
       return;
     }
@@ -379,7 +384,7 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     const h = box.max.y - box.min.y;
 
     if (box.min.y >= 2.5) return; // Ceiling / roof canopy
-    if (h <= 0.55 && box.min.y <= 0.05 && box.max.y <= 0.55) return; // Walkable flat slab / porch plinth / low steps
+    if (box.max.y <= 0.55) return; // Walkable flat slab / porch plinth / low steps (walked on via floorSlabs & stairs)
     if (w > 20 && d > 20 && h < 1.0) return; // Overall terrain plinth
 
     // Check if this is a door mesh, leaf, handle, or casing
@@ -387,43 +392,26 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
       allNames.includes('door') ||
       allNames.includes('cgaxis_door') ||
       allNames.includes('gate') ||
-      lname === 'object2659' || // Left entrance double door leaf
-      lname === 'box318' ||     // Right door handle
-      lname === 'object027';    // Entrance door frame threshold
+      lname === 'object2659' ||
+      lname === 'box318' ||
+      lname === 'object027';
 
     if (isDoor) {
       doorMeshes.push({ mesh: child, box });
       return;
     }
-
-    const minDim = Math.min(w, d);
-
-    // Individual wall, column, railing, glass window, table, post
-    if (minDim <= 2.2 && h >= 0.4 && box.min.y <= 1.8 && box.max.y >= 0.3) {
-      world.colliders.push({
-        minX: box.min.x,
-        maxX: box.max.x,
-        minZ: box.min.z,
-        maxZ: box.max.z,
-        minY: box.min.y,
-        maxY: box.max.y,
-        enabled: true,
-      });
-    } else if (minDim > 2.2) {
-      // Compound multi-wall meshes (01_wall_white, 02_wall_gray, 00_glass, etc.)
-      const subBoxes = decomposeMeshToBoxes(child, child.matrixWorld);
-      for (const sb of subBoxes) {
-        world.colliders.push(sb);
-      }
-    }
   });
 
-  // Group door meshes that belong to the same doorway assembly
+  // Group door meshes that belong to the same doorway assembly (matching horizontal proximity and same floor level)
   const doorAssemblies = [];
   for (const item of doorMeshes) {
     const center = new THREE.Vector3();
     item.box.getCenter(center);
-    let found = doorAssemblies.find((a) => a.center.distanceTo(center) < 2.6);
+    let found = doorAssemblies.find((a) => {
+      const dH = Math.hypot(a.center.x - center.x, a.center.z - center.z);
+      const dY = Math.abs(a.center.y - center.y);
+      return dH < 2.6 && dY < 1.8;
+    });
     if (!found) {
       found = { center: center.clone(), box: item.box.clone(), parts: [] };
       doorAssemblies.push(found);
@@ -432,18 +420,120 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     found.parts.push(item);
   }
 
+  // Helper to ensure no static wall collider blocks the entrance stair corridor or any doorway opening
+  const isExcludedCorridor = (b) => {
+    // 1. Entrance stairs flight corridor (Line008)
+    if (b.maxX >= 10.4 && b.minX <= 13.8 && b.maxZ >= 11.2 && b.minZ <= 14.0 && b.maxY <= 1.2) {
+      return true;
+    }
+    // 2. Interactive doorway openings
+    for (const a of doorAssemblies) {
+      const aBox = a.box;
+      const dC = new THREE.Vector3();
+      aBox.getCenter(dC);
+      const isWideX = (aBox.max.x - aBox.min.x) >= (aBox.max.z - aBox.min.z);
+      const doorW = isWideX ? (aBox.max.x - aBox.min.x) : (aBox.max.z - aBox.min.z);
+      const xTol = isWideX ? doorW * 0.48 : 0.35;
+      const zTol = !isWideX ? doorW * 0.48 : 0.35;
+      if (
+        b.maxX >= (dC.x - xTol) && b.minX <= (dC.x + xTol) &&
+        b.maxZ >= (dC.z - zTol) && b.minZ <= (dC.z + zTol) &&
+        Math.abs(b.minY - aBox.min.y) < 1.5
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Add real solid wall and column colliders
+  wrapper.traverse((child) => {
+    if (!child.isMesh || !child.visible) return;
+
+    const lname = (child.name || '').toLowerCase();
+    const parentName = (child.parent?.name || '').toLowerCase();
+    const allNames = `${lname} ${parentName}`;
+
+    if (
+      allNames.includes('ground') ||
+      allNames.includes('grass') ||
+      allNames.includes('water') ||
+      allNames.includes('pool') ||
+      allNames.includes('sidewalk') ||
+      allNames.includes('lawn') ||
+      allNames.includes('road') ||
+      allNames.includes('street') ||
+      allNames.includes('curb') ||
+      allNames.includes('box043') ||
+      allNames.includes('object041') ||
+      allNames.includes('11_object006') ||
+      allNames.includes('plane012') ||
+      allNames.includes('plane013') ||
+      allNames.includes('object2652') ||
+      allNames.includes('object2667') ||
+      allNames.includes('line008') ||
+      allNames.includes('box019') ||
+      allNames.includes('object2668') ||
+      allNames.includes('steps') ||
+      allNames.includes('stair') ||
+      allNames.includes('plinth') ||
+      allNames.includes('door') ||
+      allNames.includes('cgaxis_door') ||
+      allNames.includes('gate') ||
+      lname === 'object2659' ||
+      lname === 'box318' ||
+      lname === 'object027'
+    ) {
+      return;
+    }
+
+    const box = new THREE.Box3().setFromObject(child);
+    const w = box.max.x - box.min.x;
+    const d = box.max.z - box.min.z;
+    const h = box.max.y - box.min.y;
+
+    if (box.min.y >= 2.5 || box.max.y <= 0.55) return;
+    if (w > 20 && d > 20 && h < 1.0) return;
+
+    const minDim = Math.min(w, d);
+
+    if (minDim <= 2.2 && h >= 0.7 && box.max.y >= 1.0) {
+      if (!isExcludedCorridor(box)) {
+        world.colliders.push({
+          minX: box.min.x,
+          maxX: box.max.x,
+          minZ: box.min.z,
+          maxZ: box.max.z,
+          minY: box.min.y,
+          maxY: box.max.y,
+          enabled: true,
+        });
+      }
+    } else if (minDim > 2.2) {
+      const subBoxes = decomposeMeshToBoxes(child, child.matrixWorld);
+      for (const sb of subBoxes) {
+        if (!isExcludedCorridor(sb)) {
+          world.colliders.push(sb);
+        }
+      }
+    }
+  });
+
   // Setup interactive doors and solid door colliders
   for (const assembly of doorAssemblies) {
     const box = assembly.box;
     const dCenter = new THREE.Vector3();
     box.getCenter(dCenter);
 
-    // Solid door collider matching the doorway opening
+    const isWideInX = (box.max.x - box.min.x) >= (box.max.z - box.min.z);
+    const fullDoorWidth = isWideInX ? (box.max.x - box.min.x) : (box.max.z - box.min.z);
+
+    // Solid door collider matching the doorway opening (blocks player only when door is closed)
     const doorCollider = {
-      minX: box.min.x - 0.08,
-      maxX: box.max.x + 0.08,
-      minZ: box.min.z - 0.15,
-      maxZ: box.max.z + 0.15,
+      minX: isWideInX ? (dCenter.x - fullDoorWidth * 0.46) : (box.min.x - 0.08),
+      maxX: isWideInX ? (dCenter.x + fullDoorWidth * 0.46) : (box.max.x + 0.08),
+      minZ: !isWideInX ? (dCenter.z - fullDoorWidth * 0.46) : (box.min.z - 0.15),
+      maxZ: !isWideInX ? (dCenter.z + fullDoorWidth * 0.46) : (box.max.z + 0.15),
       minY: box.min.y,
       maxY: box.max.y,
       enabled: true,
@@ -452,22 +542,43 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
 
     if (typeof world.interact === 'function') {
       let isOpen = false;
+
+      // Identify movable door leaves and handles vs static frame/casing
       const initialPositions = assembly.parts
         .filter((p) => {
           const nm = (p.mesh.name || '').toLowerCase();
-          // Keep outer door frame and threshold casing static
-          return !nm.includes('38_2') && !nm.includes('027');
-        })
-        .map((p) => ({
-          mesh: p.mesh,
-          x: p.mesh.position.x,
-          z: p.mesh.position.z,
-          isLeftLeaf: p.box.min.x < dCenter.x,
-        }));
+          const pBox = p.box;
+          const pW = isWideInX ? (pBox.max.x - pBox.min.x) : (pBox.max.z - pBox.min.z);
 
-      const isWideInX = (box.max.x - box.min.x) >= (box.max.z - box.min.z);
+          // Static outer frames and thresholds span >= 85% of full opening or match casing names
+          const isFrame = pW >= fullDoorWidth * 0.85 ||
+            nm.includes('object027') ||
+            nm.includes('object2659') ||
+            nm.includes('frame') ||
+            nm.includes('casing') ||
+            nm.includes('jamb') ||
+            nm.includes('threshold');
+
+          return !isFrame;
+        })
+        .map((p) => {
+          const pCenter = new THREE.Vector3();
+          p.box.getCenter(pCenter);
+          const isLeftLeaf = isWideInX
+            ? (pCenter.x < dCenter.x)
+            : (pCenter.z < dCenter.z);
+
+          return {
+            mesh: p.mesh,
+            x: p.mesh.position.x,
+            z: p.mesh.position.z,
+            isLeftLeaf,
+          };
+        });
 
       const scale = options.scale || 0.01;
+      const slideDist = (fullDoorWidth * 0.52) / scale; // Clear doorway 100% wide!
+
       const interactItem = world.interact({
         x: dCenter.x,
         y: Math.max(1.4, dCenter.y),
@@ -487,7 +598,6 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
           // Smooth sliding double door opening animation (accounting for CAD scale)
           const startTime = performance.now();
           const duration = 450;
-          const slideDist = 0.95 / scale;
 
           const animate = (now) => {
             const t = Math.min(1, (now - startTime) / duration);
@@ -696,7 +806,7 @@ export async function loadCadHouseModel(world, cadModel, options = {}) {
       minX: -10.5,
       maxX: 16.5,
       minZ: -35.0,
-      maxZ: 13.5,
+      maxZ: 11.6,
       elevation: 0.45,
       voidZone: null,
     });

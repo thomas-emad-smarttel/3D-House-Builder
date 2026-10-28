@@ -19,8 +19,9 @@ export function resolveCollisions(p, radius, colliders, bounds) {
     for (const c of colliders) {
       if (c.enabled === false) continue;
       // Multi-floor height check: ignore walls on other floors
+      // Also allow player to step over low curbs, step risers, and thresholds up to 0.35m high
       if (c.minY !== undefined && c.maxY !== undefined) {
-        if (playerY + 1.7 <= c.minY || playerY >= c.maxY) continue;
+        if (playerY + 1.7 <= c.minY || playerY + 0.35 >= c.maxY) continue;
       }
       if (!Number.isFinite(c.minX) || !Number.isFinite(c.maxX) || !Number.isFinite(c.minZ) || !Number.isFinite(c.maxZ)) continue;
       const cx = Math.max(c.minX, Math.min(p.x, c.maxX));
@@ -55,7 +56,7 @@ export function blocked(x, z, radius, colliders, y = 0) {
   for (const c of colliders) {
     if (c.enabled === false) continue;
     if (c.minY !== undefined && c.maxY !== undefined) {
-      if (y + 1.7 <= c.minY || y >= c.maxY) continue;
+      if (y + 1.7 <= c.minY || y + 0.35 >= c.maxY) continue;
     }
     if (!Number.isFinite(c.minX) || !Number.isFinite(c.maxX) || !Number.isFinite(c.minZ) || !Number.isFinite(c.maxZ)) continue;
     const cx = Math.max(c.minX, Math.min(x, c.maxX));
