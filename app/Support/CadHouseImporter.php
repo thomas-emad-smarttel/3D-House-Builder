@@ -574,6 +574,84 @@ class CadHouseImporter
             }
         }
 
+        // Group individual door components (leaves, glass panels, frames) into unified doorway portals
+        $unifiedDoors = [];
+        foreach ($doors as $dr) {
+            $matchedIdx = null;
+            foreach ($unifiedDoors as $idx => $cand) {
+                $dH = hypot($cand['x'] - $dr['x'], $cand['z'] - $dr['z']);
+                $dY = abs($cand['y'] - $dr['y']);
+                if ($dH < 2.5 && $dY < 1.4) {
+                    $matchedIdx = $idx;
+                    break;
+                }
+            }
+
+            if ($matchedIdx === null) {
+                $unifiedDoors[] = [
+                    'id' => $dr['id'],
+                    'mesh_name' => $dr['mesh_name'],
+                    'wall' => 'front',
+                    'label' => $dr['label'],
+                    'offset' => 0.0,
+                    'x' => $dr['x'],
+                    'y' => $dr['y'],
+                    'z' => $dr['z'],
+                    'minX' => $dr['x'] - $dr['width'] / 2,
+                    'maxX' => $dr['x'] + $dr['width'] / 2,
+                    'minY' => $dr['y'] - $dr['height'] / 2,
+                    'maxY' => $dr['y'] + $dr['height'] / 2,
+                    'minZ' => $dr['z'] - ($dr['depth'] ?? 0.2) / 2,
+                    'maxZ' => $dr['z'] + ($dr['depth'] ?? 0.2) / 2,
+                ];
+            } else {
+                $u = &$unifiedDoors[$matchedIdx];
+                $u['minX'] = min($u['minX'], $dr['x'] - $dr['width'] / 2);
+                $u['maxX'] = max($u['maxX'], $dr['x'] + $dr['width'] / 2);
+                $u['minY'] = min($u['minY'], $dr['y'] - $dr['height'] / 2);
+                $u['maxY'] = max($u['maxY'], $dr['y'] + $dr['height'] / 2);
+                $u['minZ'] = min($u['minZ'], $dr['z'] - ($dr['depth'] ?? 0.2) / 2);
+                $u['maxZ'] = max($u['maxZ'], $dr['z'] + ($dr['depth'] ?? 0.2) / 2);
+                $u['x'] = round(($u['minX'] + $u['maxX']) / 2, 2);
+                $u['y'] = round(($u['minY'] + $u['maxY']) / 2, 2);
+                $u['z'] = round(($u['minZ'] + $u['maxZ']) / 2, 2);
+                unset($u);
+            }
+        }
+
+        $finalDoors = [];
+        $entranceCount = 0;
+        $patioCount = 0;
+        foreach ($unifiedDoors as $u) {
+            $doorW = max(1.2, round($u['maxX'] - $u['minX'], 2));
+            $doorH = max(2.1, round($u['maxY'] - $u['minY'], 2));
+            $isEntrance = abs($u['z'] - 9.9) < 6.0 || $u['z'] > 0;
+            if ($isEntrance) {
+                $entranceCount++;
+                $slugId = $entranceCount === 1 ? 'cad-door-front-entrance' : "cad-door-front-entrance-{$entranceCount}";
+                $title = $entranceCount === 1 ? 'Front Entrance Double Door' : "Front Entrance Double Door ({$entranceCount})";
+            } else {
+                $patioCount++;
+                $slugId = $patioCount === 1 ? 'cad-door-patio-garden' : "cad-door-patio-garden-{$patioCount}";
+                $title = $patioCount === 1 ? 'Patio Garden Double Door' : "Patio Garden Double Door ({$patioCount})";
+            }
+
+            $finalDoors[] = [
+                'id' => $slugId,
+                'mesh_name' => $u['mesh_name'],
+                'wall' => 'front',
+                'label' => $title,
+                'offset' => 0.0,
+                'width' => $doorW,
+                'height' => $doorH,
+                'x' => $u['x'],
+                'y' => $u['y'],
+                'z' => $u['z'],
+            ];
+        }
+
+        $doors = $finalDoors;
+
         return compact('furniture', 'lighting', 'plants', 'doors', 'stairs');
     }
 

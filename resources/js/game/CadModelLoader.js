@@ -50,8 +50,18 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 3. Helper Ceilings & Temporary Reference Planes (Object2652 covers the open-air driveway)
-  if (allNames.includes('object2652')) {
+  // 3. Helper Ceilings, Reference Enclosures & Volumetric Bounding Boxes
+  if (
+    allNames.includes('object2652') ||
+    allNames.includes('object2658') ||
+    allNames.includes('012_box061') ||
+    allNames.includes('_012_box061') ||
+    allNames.includes('013_box016') ||
+    allNames.includes('_013_box016') ||
+    allNames.includes('plane009') ||
+    allNames.includes('box069') ||
+    allNames.includes('object027')
+  ) {
     mesh.visible = false;
     mesh.castShadow = false;
     mesh.receiveShadow = false;
@@ -175,8 +185,17 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 12. Lawn Grass & Ground Terrain (Object011, Box043, grass, lawn, garden)
-  if (allNames.includes('object011') || allNames.includes('box043') || allNames.includes('grass') || allNames.includes('lawn') || allNames.includes('garden')) {
+  // 12. Lawn Grass & Ground Terrain (00_plane008, Object011, Object016, Box043, grass, lawn, garden)
+  if (
+    allNames.includes('00_plane008') ||
+    allNames.includes('plane008') ||
+    allNames.includes('object011') ||
+    allNames.includes('object016') ||
+    allNames.includes('box043') ||
+    allNames.includes('grass') ||
+    allNames.includes('lawn') ||
+    allNames.includes('garden')
+  ) {
     mesh.material = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#2d5a27'),
       roughness: 0.95,
@@ -214,7 +233,23 @@ function applySmartArchitecturalMaterial(mesh, options = {}) {
     return;
   }
 
-  // 15. Standard Clean Architectural Stucco (Default fallback)
+  // 15. If authentic MTL material color is present, preserve tone with modern PBR properties
+  if (mesh.material && mesh.material.color) {
+    const c = mesh.material.color;
+    if (!(c.r >= 0.98 && c.g >= 0.98 && c.b >= 0.98)) {
+      mesh.material = new THREE.MeshStandardMaterial({
+        color: c.clone(),
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+      });
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      return;
+    }
+  }
+
+  // Standard Clean Architectural Stucco (Default fallback)
   mesh.material = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#e2e8f0'),
     roughness: 0.75,
@@ -381,23 +416,21 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     const d = box.max.z - box.min.z;
     const h = box.max.y - box.min.y;
 
-    if (box.min.y >= 2.5) return; // Ceiling / roof canopy
-    if (box.max.y <= 0.55) return; // Walkable flat slab / porch plinth / low steps (walked on via floorSlabs & stairs)
-    if (w > 20 && d > 20 && h < 1.0) return; // Overall terrain plinth
-
-    // Check if this is a door mesh, leaf, handle, or casing
+    // Check if this is a door mesh, leaf, handle, or casing FIRST before elevation cutoffs
     const isDoor =
       allNames.includes('door') ||
       allNames.includes('cgaxis_door') ||
       allNames.includes('gate') ||
-      lname === 'object2659' ||
-      lname === 'box318' ||
-      lname === 'object027';
+      lname === 'object2659';
 
     if (isDoor) {
       doorMeshes.push({ mesh: child, box });
       return;
     }
+
+    if (box.min.y >= 2.5) return; // Ceiling / roof canopy
+    if (box.max.y <= 0.55) return; // Walkable flat slab / porch plinth / low steps (walked on via floorSlabs & stairs)
+    if (w > 20 && d > 20 && h < 1.0) return; // Overall terrain plinth
   });
 
   // Group door meshes that belong to the same doorway assembly (matching horizontal proximity and same floor level)
@@ -408,7 +441,7 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
     let found = doorAssemblies.find((a) => {
       const dH = Math.hypot(a.center.x - center.x, a.center.z - center.z);
       const dY = Math.abs(a.center.y - center.y);
-      return dH < 2.6 && dY < 1.8;
+      return dH < 3.5 && dY < 2.5;
     });
     if (!found) {
       found = { center: center.clone(), box: item.box.clone(), parts: [] };
@@ -577,18 +610,21 @@ function setupCadCollidersAndDoors(world, wrapper, options = {}) {
       const scale = options.scale || 0.01;
       const slideDist = (fullDoorWidth * 0.52) / scale; // Clear doorway 100% wide!
 
+      const isEntrance = Math.abs(dCenter.z - 9.9) < 6.0 || dCenter.z > 0;
+      const doorTitle = isEntrance ? 'entrance door' : 'patio door';
+
       const interactItem = world.interact({
         x: dCenter.x,
-        y: Math.max(1.4, dCenter.y),
+        y: dCenter.y,
         z: dCenter.z,
-        radius: 5.5, // Reachable from top of entrance steps and landing
+        radius: 5.5, // Reachable from both sides of doorway
         cardRadius: 9.0,
-        label: 'Press E to open entrance door',
+        label: `Press E to open ${doorTitle}`,
         action: () => {
           isOpen = !isOpen;
           doorCollider.enabled = !isOpen;
 
-          interactItem.label = isOpen ? 'Press E to close door' : 'Press E to open door';
+          interactItem.label = isOpen ? `Press E to close ${doorTitle}` : `Press E to open ${doorTitle}`;
           if (world.ctx?.game?.interactions?.current === interactItem) {
             world.ctx.game.ui.hud.setPrompt(interactItem.label);
           }
